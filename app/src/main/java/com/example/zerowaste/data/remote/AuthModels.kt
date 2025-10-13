@@ -1,30 +1,60 @@
 package com.example.zerowaste.data.remote
 
-// --- Login Request ---
-// This is sent when the user first enters their username and password.
+import com.google.gson.annotations.SerializedName
+
+// --- Login Request (No changes needed) ---
 data class LoginRequest(
     val username: String,
     val password: String
 )
 
-// --- Unified Login Response ---
-// This is the flexible response from the first login call.
-data class UnifiedLoginResponse(
+// --- Unified Login/2FA Response (UPDATED) ---
+// This now exactly matches your backend's LoginResponse DTO.
+data class LoginResponse(
+    val status: String,
     val message: String,
-    val twoFactorEnabled: Boolean, // Flag to tell the app what to do next
-    val token: String?,            // The final JWT (if 2FA is OFF)
-    val twoFactorToken: String?     // The temporary token (if 2FA is ON)
+    val token: String? // This will be null when 2FA is required
 )
 
-// --- 2FA Verification Request ---
-// This is sent after the user enters their 2FA code.
+// --- 2FA Verification Request (UPDATED) ---
+// This now sends the username and code, as required by your new API.
 data class Verify2faRequest(
-    val twoFactorToken: String,
+    val username: String,
     val code: String
 )
 
-// --- Final Login Response ---
-// The final response from a successful 2FA verification.
-data class FinalLoginResponse(
-    val token: String
+// --- Generic and Registration DTOs (No changes needed) ---
+
+// Generic wrapper for responses like registration
+data class ApiResponse<T>(
+    val data: T,
+    val status: Int,
+    val errorCode: String?
 )
+
+// For parsing custom API errors
+data class ApiErrorResponse(
+    val status: Int,
+    @SerializedName("errorCode")
+    val errorCode: String,
+    val data: Any? = null
+)
+
+// Registration DTOs
+data class RegistrationRequest(
+    val username: String,
+    val password: String,
+    val email: String,
+    val householdSize: Long?,
+    val twoFactorAuthEnabled: Boolean?,
+    val status: String
+)
+
+data class RegistrationResponse(
+    val username: String,
+    val email: String,
+    val householdSize: Long?,
+    val twoFactorAuthEnabled: Boolean?,
+    val status: String
+)
+

@@ -4,12 +4,16 @@ import retrofit2.http.Body
 import retrofit2.http.POST
 
 interface AuthApiService {
-    // This now returns our new, flexible response object.
+    // UPDATED: This now returns the new unified LoginResponse
     @POST("api/auth/login")
-    suspend fun login(@Body request: LoginRequest): UnifiedLoginResponse
+    suspend fun login(@Body request: LoginRequest): LoginResponse
 
-    // The 2FA verification endpoint.
+    // UPDATED: This uses the new Verify2faRequest and returns the final LoginResponse
     @POST("api/auth/verify-2fa")
-    suspend fun verify2fa(@Body request: Verify2faRequest): FinalLoginResponse
+    suspend fun verify2fa(@Body request: Verify2faRequest): LoginResponse
+
+    // No changes to registration
+    @POST("api/registration/register")
+    suspend fun registerUser(@Body request: RegistrationRequest): ApiResponse<RegistrationResponse>
 }
 
