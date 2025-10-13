@@ -4,8 +4,9 @@ import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.zerowaste.data.remote.ApiErrorResponse
+import com.example.zerowaste.data.remote.ApiErrorResponse // Ensure this import is present
 import com.example.zerowaste.data.remote.LoginRequest
+import com.example.zerowaste.data.remote.LoginResponse
 import com.example.zerowaste.data.remote.RetrofitClient
 import com.example.zerowaste.data.remote.Verify2faRequest
 import com.google.gson.Gson
@@ -28,7 +29,7 @@ class LoginViewModel : ViewModel() {
     private val _finalLoginResult = MutableLiveData<Result<String>>()
     val finalLoginResult: LiveData<Result<String>> = _finalLoginResult
 
-    private var tempTwoFactorToken: String? = null
+    private var tempUsername: String? = null
 
     fun login(username: String, password: String) {
         viewModelScope.launch {
@@ -36,76 +37,58 @@ class LoginViewModel : ViewModel() {
                 val request = LoginRequest(username, password)
                 val response = RetrofitClient.authApiService.login(request)
 
-                if (response.twoFactorEnabled) {
-                    tempTwoFactorToken = response.twoFactorToken
+                if (response.status == "2FA_REQUIRED") {
+                    tempUsername = username
                     _uiState.value = LoginUiState.Entering2faCode
+                } else if (response.status == "SUCCESS" && response.token != null) {
+                    _finalLoginResult.postValue(Result.success(response.token))
                 } else {
-                    response.token?.let { finalToken ->
-                        _finalLoginResult.postValue(Result.success(finalToken))
-                    } ?: _finalLoginResult.postValue(Result.failure(Exception("Token was not provided.")))
+                    _finalLoginResult.postValue(Result.failure(Exception("Unexpected response from server.")))
                 }
             } catch (e: Exception) {
-                // This is the new, smarter error handling block
-                val errorMessage = when (e) {
-                    is HttpException -> { // This is for errors from the server (like 400, 401, 500)
-                        try {
-                            // Attempt to parse the error body into our custom error object
-                            val errorBody = e.response()?.errorBody()?.string()
-                            val apiError = Gson().fromJson(errorBody, ApiErrorResponse::class.java)
-
-                            // Now you can use the specific error code!
-                            "Login Failed: ${apiError.errorCode}"
-
-                        } catch (jsonError: Exception) {
-                            // If parsing fails, fall back to a generic message based on the status code
-                            when (e.code()) {
-                                400 -> "Invalid request. Please check your input."
-                                401 -> "Invalid username or password."
-                                500 -> "A server error occurred. Please try again later."
-                                else -> "An unexpected error occurred."
-                            }
-                        }
-                    }
-                    is IOException -> "Could not connect to the server. Please check your network."
-                    else -> e.message ?: "An unknown error occurred."
-                }
-                _finalLoginResult.postValue(Result.failure(Exception(errorMessage)))
+                handleApiError(e) // Use the corrected handler
             }
         }
     }
 
     fun verify2faCode(code: String) {
-        val token = tempTwoFactorToken ?: run {
-            _finalLoginResult.postValue(Result.failure(Exception("2FA token is missing.")))
+        val username = tempUsername ?: run {
+            _finalLoginResult.postValue(Result.failure(Exception("Username is missing.")))
             return
         }
-
         viewModelScope.launch {
             try {
-                val request = Verify2faRequest(twoFactorToken = token, code = code)
+                val request = Verify2faRequest(username = username, code = code)
                 val response = RetrofitClient.authApiService.verify2fa(request)
-
-                _finalLoginResult.postValue(Result.success(response.token))
-                _uiState.value = LoginUiState.EnteringCredentials
-
-            } catch (e: Exception) {
-                // Applying similar smart error handling here
-                val errorMessage = when (e) {
-                    is HttpException -> {
-                        try {
-                            val errorBody = e.response()?.errorBody()?.string()
-                            val apiError = Gson().fromJson(errorBody, ApiErrorResponse::class.java)
-                            "Verification Failed: ${apiError.errorCode}"
-                        } catch (jsonError: Exception) {
-                            "Invalid 2FA code."
-                        }
-                    }
-                    is IOException -> "Could not connect to the server. Please check your network."
-                    else -> e.message ?: "An unknown error occurred."
+                if (response.status == "SUCCESS" && response.token != null) {
+                    _finalLoginResult.postValue(Result.success(response.token))
+                    _uiState.value = LoginUiState.EnteringCredentials
+                } else {
+                    _finalLoginResult.postValue(Result.failure(Exception(response.message)))
                 }
-                _finalLoginResult.postValue(Result.failure(Exception(errorMessage)))
+            } catch (e: Exception) {
+                handleApiError(e) // Use the corrected handler
             }
         }
+    }
+
+    // --- THIS FUNCTION IS NOW FIXED ---
+    private fun handleApiError(e: Exception) {
+        val errorMessage = when (e) {
+            is HttpException -> {
+                try {
+                    val errorBody = e.response()?.errorBody()?.string()
+                    // CORRECTED: Use the ApiErrorResponse class to parse the error
+                    val apiError = Gson().fromJson(errorBody, ApiErrorResponse::class.java)
+                    apiError.errorCode // Now it correctly gets the errorCode
+                } catch (jsonError: Exception) {
+                    "Failed to parse error response."
+                }
+            }
+            is IOException -> "Could not connect to the server."
+            else -> e.message ?: "An unknown error occurred."
+        }
+        _finalLoginResult.postValue(Result.failure(Exception(errorMessage)))
     }
 }
 
