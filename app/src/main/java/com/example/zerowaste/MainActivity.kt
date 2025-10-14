@@ -28,6 +28,8 @@ import com.example.zerowaste.ui.login.LoginFlow
 import com.example.zerowaste.ui.login.LoginViewModel
 import com.example.zerowaste.ui.notification.NotificationScreen
 import com.example.zerowaste.ui.notification.NotificationViewModel
+import com.example.zerowaste.ui.passwordreset.PasswordResetFlow
+import com.example.zerowaste.ui.passwordreset.PasswordResetViewModel
 import com.example.zerowaste.ui.registration.RegistrationScreen
 import com.example.zerowaste.ui.registration.RegistrationViewModel
 import com.example.zerowaste.ui.screens.BrowseFoodItemScreen
@@ -51,12 +53,11 @@ sealed class BottomBarScreen(
 class MainActivity : ComponentActivity() {
     private val loginViewModel: LoginViewModel by viewModels()
     private val registrationViewModel: RegistrationViewModel by viewModels()
-    // --- NEW: Instantiate Home and Settings ViewModels ---
     private val homeViewModel: HomeViewModel by viewModels()
     private val settingsViewModel: SettingsViewModel by viewModels()
-    // --- 2. Create an instance of NotificationViewModel ---
     private val notificationViewModel: NotificationViewModel by viewModels()
     private val browseFoodItemViewModel: BrowseFoodItemViewModel by viewModels()
+    private val passwordResetViewModel: PasswordResetViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -69,7 +70,8 @@ class MainActivity : ComponentActivity() {
                         homeViewModel = homeViewModel,
                         settingsViewModel = settingsViewModel,
                         notificationViewModel = notificationViewModel,
-                        browseFoodItemViewModel = browseFoodItemViewModel
+                        browseFoodItemViewModel = browseFoodItemViewModel,
+                        passwordResetViewModel = passwordResetViewModel // Pass it down
                     )
                 }
             }
@@ -81,10 +83,11 @@ class MainActivity : ComponentActivity() {
 fun AppNavigation(
     loginViewModel: LoginViewModel,
     registrationViewModel: RegistrationViewModel,
-    homeViewModel: HomeViewModel, // Pass down
+    homeViewModel: HomeViewModel,
     settingsViewModel: SettingsViewModel,
-    notificationViewModel: NotificationViewModel,// Pass down
-    browseFoodItemViewModel: BrowseFoodItemViewModel
+    notificationViewModel: NotificationViewModel,
+    browseFoodItemViewModel: BrowseFoodItemViewModel,
+    passwordResetViewModel: PasswordResetViewModel // Receive
 ) {
     val navController = rememberNavController()
     NavHost(navController = navController, startDestination = "auth") {
@@ -93,6 +96,8 @@ fun AppNavigation(
                 LoginFlow(
                     viewModel = loginViewModel,
                     onNavigateToRegister = { navController.navigate("register") },
+                    // --- NEW: Add navigation to the password reset flow ---
+                    onNavigateToForgotPassword = { navController.navigate("password_reset") },
                     onLoginSuccess = {
                         navController.navigate("main") {
                             popUpTo("auth") { inclusive = true }
@@ -107,15 +112,24 @@ fun AppNavigation(
                     onRegistrationSuccess = { navController.popBackStack() }
                 )
             }
+            composable("password_reset") {
+                PasswordResetFlow(
+                    viewModel = passwordResetViewModel,
+                    onNavigateBackToLogin = {
+                        passwordResetViewModel.resetFlow()
+                        navController.popBackStack()
+                    }
+                )
+            }
         }
         composable("main") {
             MainAppScreen(
                 appNavController = navController,
-                homeViewModel = homeViewModel, // Pass down
-                settingsViewModel = settingsViewModel, // Pass down
+                homeViewModel = homeViewModel,
+                settingsViewModel = settingsViewModel,
                 loginViewModel = loginViewModel,
-                notificationViewModel= notificationViewModel,
-                browseFoodItemViewModel = browseFoodItemViewModel// Pass down
+                notificationViewModel = notificationViewModel,
+                browseFoodItemViewModel = browseFoodItemViewModel
             )
         }
     }

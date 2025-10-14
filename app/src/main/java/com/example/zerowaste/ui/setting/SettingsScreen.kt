@@ -1,9 +1,9 @@
 package com.example.zerowaste.ui.setting
 
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Lock
@@ -13,31 +13,47 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.navigation.NavController
-import androidx.navigation.compose.rememberNavController
+import androidx.compose.ui.window.Dialog
 import com.example.zerowaste.ui.screens.main.SettingsViewModel
+import com.example.zerowaste.ui.screens.main.TwoFactorSetupState
 import com.example.zerowaste.ui.theme.ZeroWasteTheme
 
 @Composable
 fun SettingsScreen(
-    viewModel: SettingsViewModel, // <-- 1. ViewModel is now a parameter
-    onLogout: () -> Unit // Callback function to trigger logout navigation
+    viewModel: SettingsViewModel,
+    onLogout: () -> Unit
 ) {
-    // 2. Collect the state from the ViewModel
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
 
-    // 3. Trigger logout navigation when the ViewModel's state changes
+    LaunchedEffect(Unit) {
+        viewModel.loadUserSettings()
+    }
+    // This effect handles the one-time logout navigation
     LaunchedEffect(uiState.logoutCompleted) {
         if (uiState.logoutCompleted) {
-            onLogout() // Trigger the navigation
-            viewModel.resetLogoutState() // --- THIS IS THE KEY FIX --- Reset the state immediately
+            onLogout()
+            viewModel.resetLogoutState()
         }
     }
 
+    // --- THIS IS THE KEY FIX ---
+    // This effect now shows the error message and then immediately resets the state.
+    LaunchedEffect(uiState.twoFactorSetupState) {
+        if (uiState.twoFactorSetupState is TwoFactorSetupState.Error) {
+            // 1. Show the error message to the user
+            Toast.makeText(context, (uiState.twoFactorSetupState as TwoFactorSetupState.Error).message, Toast.LENGTH_LONG).show()
+            // 2. Reset the state so the message doesn't show again
+            viewModel.clearTwoFactorState()
+        }
+    }
+
+    // Main UI content
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -62,17 +78,21 @@ fun SettingsScreen(
                 icon = Icons.Default.Lock,
                 title = "Enable Two-Factor Authentication",
                 checked = uiState.is2faEnabled,
-                // 4. Call the ViewModel function on interaction
-                onCheckedChange = { viewModel.on2faToggleChanged(it) }
+                onCheckedChange = { isEnabled ->
+                    if (isEnabled) {
+                        viewModel.onEnable2faClicked()
+                    } else {
+                        viewModel.onDisable2faClicked()
+                    }
+                }
             )
 
             Divider(modifier = Modifier.padding(vertical = 16.dp))
 
+
             Spacer(modifier = Modifier.weight(1f))
 
-            // --- Logout Button ---
             OutlinedButton(
-                // 5. Call the ViewModel function on click
                 onClick = { viewModel.onLogoutClicked() },
                 modifier = Modifier.fillMaxWidth()
             ) {
@@ -82,14 +102,73 @@ fun SettingsScreen(
             }
         }
 
-        // 6. Show a loading overlay if any operation is in progress
+        // --- Loading Indicator and Dialogs ---
         if (uiState.isLoading) {
             CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+        }
+
+        // Show the 2FA verification dialog when the state requires it
+        if (uiState.twoFactorSetupState is TwoFactorSetupState.AwaitingVerification) {
+            TwoFactorVerificationDialog(
+                onVerify = { code -> viewModel.onVerify2faSetup(code) },
+                onDismiss = { viewModel.cancel2faSetup() }
+            )
         }
     }
 }
 
-// A reusable composable for settings items with a Switch
+
+// --- NEW COMPOSABLE for the 2FA Verification Dialog ---
+@Composable
+fun TwoFactorVerificationDialog(
+    onVerify: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var code by remember { mutableStateOf("") }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    "Enable 2FA",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("A verification code has been sent to your email. Please enter it below to complete the setup.")
+                Spacer(modifier = Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = code,
+                    onValueChange = { code = it },
+                    label = { Text("Verification Code") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Cancel")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(onClick = { onVerify(code) }) {
+                        Text("Verify")
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+// --- Reusable Composables (No Changes) ---
 @Composable
 fun SettingsToggleItem(
     icon: ImageVector,
@@ -110,7 +189,6 @@ fun SettingsToggleItem(
     }
 }
 
-// A reusable composable for settings items that navigate somewhere else
 @Composable
 fun SettingsClickableItem(
     icon: ImageVector,
@@ -131,14 +209,11 @@ fun SettingsClickableItem(
     }
 }
 
-
-
 @Preview(showBackground = true)
 @Composable
 fun SettingsScreenPreview() {
     ZeroWasteTheme {
-        // Preview works without a ViewModel, but shows the base state
-        Text("Settings Screen Preview (Connect ViewModel for full preview)")
+        Text("Settings Screen Preview (Requires ViewModel)")
     }
 }
 

@@ -60,14 +60,45 @@ data class RegistrationResponse(
 )
 
 data class UserDetailsResponse(
+    @SerializedName("id")
     val id: Long,
+
+    @SerializedName("username")
     val username: String,
+
+    @SerializedName("email")
     val email: String,
+
+    @SerializedName("householdSize")
     val householdSize: Long?,
+
+    @SerializedName("twoFactorAuthEnabled")
     val twoFactorAuthEnabled: Boolean,
-    val status: String, // Enums from backend are typically represented as Strings
+
+    @SerializedName("status")
+    val status: String,
+
+    @SerializedName("totalItems")
     val totalItems: Long,
+
+    @SerializedName("donationsMade")
     val donationsMade: Long
 )
 
 data class ExpiringItem(val name: String, val quantity: String, val expiryDate: String)
+
+data class Verify2faSetupRequest(
+    val verificationCode: String
+)
+
+// For the first step: requesting a reset code
+data class PasswordResetRequest(
+    val email: String
+)
+
+// For the second step: executing the reset with the code and new password
+data class PasswordResetExecute(
+    val email: String,
+    val code: String,
+    val newPassword: String
+)

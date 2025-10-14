@@ -4,7 +4,6 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.zerowaste.data.remote.ApiErrorResponse
 import com.example.zerowaste.data.remote.RegistrationRequest
@@ -18,14 +17,15 @@ import java.io.IOException
 class RegistrationViewModel(application: Application) : AndroidViewModel(application) {
 
     private val apiService = RetrofitClient.getAuthApi(application)
-    private val _registrationResult = MutableLiveData<Result<RegistrationResponse>>()
-    val registrationResult: LiveData<Result<RegistrationResponse>> = _registrationResult
+
+    // 1. Make the LiveData nullable so we can clear it
+    private val _registrationResult = MutableLiveData<Result<RegistrationResponse>?>()
+    val registrationResult: LiveData<Result<RegistrationResponse>?> = _registrationResult
 
     fun register(request: RegistrationRequest) {
         viewModelScope.launch {
             try {
                 val response = apiService.registerUser(request)
-                // The 'data' field from your ApiResponse wrapper contains the user info
                 _registrationResult.postValue(Result.success(response.data))
             } catch (e: Exception) {
                 val errorMessage = when (e) {
@@ -45,4 +45,10 @@ class RegistrationViewModel(application: Application) : AndroidViewModel(applica
             }
         }
     }
+
+    // --- 2. NEW FUNCTION TO CLEAR THE REGISTRATION RESULT ---
+    fun clearRegistrationResult() {
+        _registrationResult.value = null
+    }
 }
+
