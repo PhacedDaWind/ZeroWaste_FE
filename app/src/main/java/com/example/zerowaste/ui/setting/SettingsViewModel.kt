@@ -1,13 +1,14 @@
-package com.example.zerowaste.ui.setting
+package com.example.zerowaste.ui.screens.main
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.zerowaste.data.local.SessionManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
-// This data class holds the state for the Settings screen
 data class SettingsUiState(
     val is2faEnabled: Boolean = false,
     val isLoading: Boolean = true,
@@ -15,7 +16,11 @@ data class SettingsUiState(
     val logoutCompleted: Boolean = false
 )
 
-class SettingsViewModel : ViewModel() {
+// 1. Change ViewModel to AndroidViewModel
+class SettingsViewModel(application: Application) : AndroidViewModel(application) {
+
+    // 2. Create an instance of SessionManager
+    private val sessionManager = SessionManager(application)
 
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState
@@ -26,11 +31,9 @@ class SettingsViewModel : ViewModel() {
 
     private fun loadUserSettings() {
         viewModelScope.launch {
-            // In a real app, you would fetch the user's current settings from your backend.
-            // We'll simulate a network call.
             delay(500)
             _uiState.value = SettingsUiState(
-                is2faEnabled = false, // Placeholder value
+                is2faEnabled = false,
                 isLoading = false
             )
         }
@@ -40,20 +43,15 @@ class SettingsViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
-                // In a real app, you would call your API here to update the user's 2FA setting.
-                // For example: userRepository.update2fa(isEnabled)
-                delay(1000) // Simulate network delay for the update
-
-                // Update the state on success
+                delay(1000)
                 _uiState.value = _uiState.value.copy(
                     is2faEnabled = isEnabled,
                     isLoading = false
                 )
             } catch (e: Exception) {
-                // Handle errors and revert the state if the API call fails
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
-                    errorMessage = "Failed to update setting. Please try again."
+                    errorMessage = "Failed to update setting."
                 )
             }
         }
@@ -61,10 +59,15 @@ class SettingsViewModel : ViewModel() {
 
     fun onLogoutClicked() {
         viewModelScope.launch {
-            // In a real app, you might call a logout endpoint on your backend.
-            // You would also clear any locally stored data (like the JWT).
-            // For now, we'll just update the state to trigger navigation.
+            // 3. CLEAR THE SESSION DATA
+            sessionManager.clearSession()
+            // Then update the UI state to trigger navigation
             _uiState.value = _uiState.value.copy(logoutCompleted = true)
         }
     }
+
+    fun resetLogoutState() {
+        _uiState.value = _uiState.value.copy(logoutCompleted = false)
+    }
 }
+

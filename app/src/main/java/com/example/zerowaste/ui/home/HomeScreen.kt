@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.Close // CORRECTED: Changed from C
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -22,28 +23,30 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.zerowaste.R // Make sure to have a placeholder image in res/drawable
+import com.example.zerowaste.data.remote.ExpiringItem
 import com.example.zerowaste.ui.theme.ZeroWasteTheme
 
-// Data class for expiring items remains here for now
-data class ExpiringItem(val name: String, val quantity: String, val expiryDate: String)
 
 @Composable
-fun HomeScreen(viewModel: HomeViewModel) { // <-- 1. ViewModel is now a parameter
-    // 2. Collect the state from the ViewModel
+fun HomeScreen(viewModel: HomeViewModel) {
     val uiState by viewModel.uiState.collectAsState()
 
-    // 3. Show a loading indicator while data is being fetched
+    // --- THIS IS THE KEY FIX ---
+    // LaunchedEffect will run this block whenever the HomeScreen is first displayed.
+    // It tells the ViewModel to start loading data.
+    LaunchedEffect(Unit) {
+        viewModel.loadHomeScreenData()
+    }
+
     if (uiState.isLoading) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
         }
     } else if (uiState.errorMessage != null) {
-        // Show an error message if something went wrong
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(text = uiState.errorMessage!!, color = MaterialTheme.colorScheme.error)
         }
     } else {
-        // 4. Once loaded, display the main content using data from the uiState
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -57,6 +60,7 @@ fun HomeScreen(viewModel: HomeViewModel) { // <-- 1. ViewModel is now a paramete
         }
     }
 }
+
 
 @Composable
 fun HeaderSection(username: String) {
