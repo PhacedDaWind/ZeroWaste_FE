@@ -126,3 +126,37 @@ fun TwoFactorAuthScreen(onVerifyClicked: (String) -> Unit) {
         }
     }
 }
+
+
+// --- LOGIN FLOW COMPOSABLE (Navigator for Login/2FA) ---
+@Composable
+fun LoginFlow(viewModel: LoginViewModel, onNavigateToRegister: () -> Unit,
+              onLoginSuccess: () -> Unit) {
+    val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+
+    val finalLoginResult by viewModel.finalLoginResult.observeAsState()
+    LaunchedEffect(finalLoginResult) {
+        finalLoginResult?.let { result ->
+            result.onSuccess { token ->
+                Toast.makeText(context, "Login Complete! Welcome.", Toast.LENGTH_LONG).show()
+                onLoginSuccess() // <-- Make sure you call the function here
+            }
+            result.onFailure { error ->
+                Toast.makeText(context, error.message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+
+    // This 'when' block automatically shows the correct screen based on ViewModel state
+    when (uiState) {
+        LoginUiState.EnteringCredentials -> CredentialsScreen(
+            onLoginClicked = { username, password -> viewModel.login(username, password) },
+            onNavigateToRegister = onNavigateToRegister
+        )
+        LoginUiState.Entering2faCode -> TwoFactorAuthScreen(
+            onVerifyClicked = { code -> viewModel.verify2faCode(code) }
+        )
+    }
+}
