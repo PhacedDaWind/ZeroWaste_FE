@@ -26,8 +26,8 @@ import com.example.zerowaste.ui.login.LoginFlow
 import com.example.zerowaste.ui.login.LoginViewModel
 import com.example.zerowaste.ui.registration.RegistrationScreen
 import com.example.zerowaste.ui.registration.RegistrationViewModel
+import com.example.zerowaste.ui.screens.main.SettingsViewModel
 import com.example.zerowaste.ui.setting.SettingsScreen
-import com.example.zerowaste.ui.setting.SettingsViewModel
 import com.example.zerowaste.ui.theme.ZeroWasteTheme
 
 // Sealed class for Bottom Bar routes remains the same
@@ -99,18 +99,19 @@ fun AppNavigation(
             MainAppScreen(
                 appNavController = navController,
                 homeViewModel = homeViewModel, // Pass down
-                settingsViewModel = settingsViewModel // Pass down
+                settingsViewModel = settingsViewModel, // Pass down
+                loginViewModel = loginViewModel
             )
         }
     }
 }
 
-
 @Composable
 fun MainAppScreen(
     appNavController: NavController,
-    homeViewModel: HomeViewModel, // Pass down
-    settingsViewModel: SettingsViewModel // Pass down
+    homeViewModel: HomeViewModel,
+    settingsViewModel: SettingsViewModel,
+    loginViewModel: LoginViewModel // <-- Receive LoginViewModel
 ) {
     val bottomNavController = rememberNavController()
     Scaffold(
@@ -120,13 +121,13 @@ fun MainAppScreen(
             BottomNavGraph(
                 appNavController = appNavController,
                 bottomNavController = bottomNavController,
-                homeViewModel = homeViewModel, // Pass down
-                settingsViewModel = settingsViewModel // Pass down
+                homeViewModel = homeViewModel,
+                settingsViewModel = settingsViewModel,
+                loginViewModel = loginViewModel // <-- Pass LoginViewModel to the bottom graph
             )
         }
     }
 }
-
 // BottomBar composable remains the same...
 @Composable
 fun BottomBar(navController: NavHostController) {
@@ -163,24 +164,27 @@ fun BottomBar(navController: NavHostController) {
 fun BottomNavGraph(
     appNavController: NavController,
     bottomNavController: NavHostController,
-    homeViewModel: HomeViewModel, // Receive
-    settingsViewModel: SettingsViewModel // Receive
+    homeViewModel: HomeViewModel,
+    settingsViewModel: SettingsViewModel,
+    loginViewModel: LoginViewModel // <-- Receive LoginViewModel
 ) {
     NavHost(
         navController = bottomNavController,
         startDestination = BottomBarScreen.Home.route
     ) {
         composable(route = BottomBarScreen.Home.route) {
-            // Pass the ViewModel to the screen
             HomeScreen(viewModel = homeViewModel)
         }
         composable(route = BottomBarScreen.Browse.route) { Text("Browse Screen") }
         composable(route = BottomBarScreen.Notifications.route) { Text("Notifications Screen") }
         composable(route = BottomBarScreen.Settings.route) {
-            // Pass the ViewModel to the screen
             SettingsScreen(
                 viewModel = settingsViewModel,
                 onLogout = {
+                    // --- THIS IS THE KEY FIX ---
+                    // 1. Clear the old login state
+                    loginViewModel.clearLoginResult()
+                    // 2. Navigate back to the auth flow
                     appNavController.navigate("auth") {
                         popUpTo("main") { inclusive = true }
                     }

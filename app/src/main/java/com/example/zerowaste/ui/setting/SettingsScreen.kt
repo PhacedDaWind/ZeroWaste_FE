@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
+import com.example.zerowaste.ui.screens.main.SettingsViewModel
 import com.example.zerowaste.ui.theme.ZeroWasteTheme
 
 @Composable
@@ -32,7 +33,8 @@ fun SettingsScreen(
     // 3. Trigger logout navigation when the ViewModel's state changes
     LaunchedEffect(uiState.logoutCompleted) {
         if (uiState.logoutCompleted) {
-            onLogout()
+            onLogout() // Trigger the navigation
+            viewModel.resetLogoutState() // --- THIS IS THE KEY FIX --- Reset the state immediately
         }
     }
 
@@ -65,19 +67,6 @@ fun SettingsScreen(
             )
 
             Divider(modifier = Modifier.padding(vertical = 16.dp))
-
-            // --- Notifications Section ---
-            Text(
-                "Notifications",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            SettingsClickableItem(
-                icon = Icons.Default.Notifications,
-                title = "Notification Settings",
-                onClick = { /* TODO: Navigate to notification settings screen */ }
-            )
 
             Spacer(modifier = Modifier.weight(1f))
 

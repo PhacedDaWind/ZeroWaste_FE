@@ -1,7 +1,9 @@
 package com.example.zerowaste.data.remote
 
 import retrofit2.http.Body
+import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.Path
 
 interface AuthApiService {
     // UPDATED: This now returns the new unified LoginResponse
@@ -15,5 +17,8 @@ interface AuthApiService {
     // No changes to registration
     @POST("api/registration/register")
     suspend fun registerUser(@Body request: RegistrationRequest): ApiResponse<RegistrationResponse>
+
+    @GET("api/user/{id}")
+    suspend fun getUserDetails(@Path("id") userId: Long): ApiResponse<UserDetailsResponse>
 }
 
