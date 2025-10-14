@@ -17,7 +17,7 @@ import java.io.IOException
 
 class RegistrationViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val apiService = RetrofitClient.getInstance(application)
+    private val apiService = RetrofitClient.getAuthApi(application)
     private val _registrationResult = MutableLiveData<Result<RegistrationResponse>>()
     val registrationResult: LiveData<Result<RegistrationResponse>> = _registrationResult
 

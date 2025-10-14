@@ -15,20 +15,26 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.*
+import com.example.zerowaste.data.local.SessionManager
 import com.example.zerowaste.ui.home.HomeScreen
 import com.example.zerowaste.ui.home.HomeViewModel
 import com.example.zerowaste.ui.login.LoginFlow
 import com.example.zerowaste.ui.login.LoginViewModel
+import com.example.zerowaste.ui.notification.NotificationScreen
+import com.example.zerowaste.ui.notification.NotificationViewModel
 import com.example.zerowaste.ui.registration.RegistrationScreen
 import com.example.zerowaste.ui.registration.RegistrationViewModel
+import com.example.zerowaste.ui.screens.BrowseFoodItemScreen
 import com.example.zerowaste.ui.screens.main.SettingsViewModel
 import com.example.zerowaste.ui.setting.SettingsScreen
 import com.example.zerowaste.ui.theme.ZeroWasteTheme
+import com.example.zerowaste.viewmodel.BrowseFoodItemViewModel
 
 // Sealed class for Bottom Bar routes remains the same
 sealed class BottomBarScreen(
@@ -48,6 +54,9 @@ class MainActivity : ComponentActivity() {
     // --- NEW: Instantiate Home and Settings ViewModels ---
     private val homeViewModel: HomeViewModel by viewModels()
     private val settingsViewModel: SettingsViewModel by viewModels()
+    // --- 2. Create an instance of NotificationViewModel ---
+    private val notificationViewModel: NotificationViewModel by viewModels()
+    private val browseFoodItemViewModel: BrowseFoodItemViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,7 +67,9 @@ class MainActivity : ComponentActivity() {
                         loginViewModel = loginViewModel,
                         registrationViewModel = registrationViewModel,
                         homeViewModel = homeViewModel,
-                        settingsViewModel = settingsViewModel
+                        settingsViewModel = settingsViewModel,
+                        notificationViewModel = notificationViewModel,
+                        browseFoodItemViewModel = browseFoodItemViewModel
                     )
                 }
             }
@@ -71,7 +82,9 @@ fun AppNavigation(
     loginViewModel: LoginViewModel,
     registrationViewModel: RegistrationViewModel,
     homeViewModel: HomeViewModel, // Pass down
-    settingsViewModel: SettingsViewModel // Pass down
+    settingsViewModel: SettingsViewModel,
+    notificationViewModel: NotificationViewModel,// Pass down
+    browseFoodItemViewModel: BrowseFoodItemViewModel
 ) {
     val navController = rememberNavController()
     NavHost(navController = navController, startDestination = "auth") {
@@ -100,7 +113,9 @@ fun AppNavigation(
                 appNavController = navController,
                 homeViewModel = homeViewModel, // Pass down
                 settingsViewModel = settingsViewModel, // Pass down
-                loginViewModel = loginViewModel
+                loginViewModel = loginViewModel,
+                notificationViewModel= notificationViewModel,
+                browseFoodItemViewModel = browseFoodItemViewModel// Pass down
             )
         }
     }
@@ -109,9 +124,11 @@ fun AppNavigation(
 @Composable
 fun MainAppScreen(
     appNavController: NavController,
-    homeViewModel: HomeViewModel,
-    settingsViewModel: SettingsViewModel,
-    loginViewModel: LoginViewModel // <-- Receive LoginViewModel
+    homeViewModel: HomeViewModel, // Pass down
+    settingsViewModel: SettingsViewModel, // Pass down
+    loginViewModel: LoginViewModel,
+    notificationViewModel: NotificationViewModel,
+    browseFoodItemViewModel: BrowseFoodItemViewModel
 ) {
     val bottomNavController = rememberNavController()
     Scaffold(
@@ -123,7 +140,9 @@ fun MainAppScreen(
                 bottomNavController = bottomNavController,
                 homeViewModel = homeViewModel,
                 settingsViewModel = settingsViewModel,
-                loginViewModel = loginViewModel // <-- Pass LoginViewModel to the bottom graph
+                loginViewModel = loginViewModel, // <-- Pass LoginViewModel to the bottom graph
+                notificationViewModel=notificationViewModel,
+                browseFoodItemViewModel = browseFoodItemViewModel// Pass down
             )
         }
     }
@@ -166,7 +185,9 @@ fun BottomNavGraph(
     bottomNavController: NavHostController,
     homeViewModel: HomeViewModel,
     settingsViewModel: SettingsViewModel,
-    loginViewModel: LoginViewModel // <-- Receive LoginViewModel
+    loginViewModel: LoginViewModel, // <-- Receive LoginViewModel
+    notificationViewModel: NotificationViewModel,
+    browseFoodItemViewModel: BrowseFoodItemViewModel// Receive
 ) {
     NavHost(
         navController = bottomNavController,
@@ -175,8 +196,25 @@ fun BottomNavGraph(
         composable(route = BottomBarScreen.Home.route) {
             HomeScreen(viewModel = homeViewModel)
         }
-        composable(route = BottomBarScreen.Browse.route) { Text("Browse Screen") }
-        composable(route = BottomBarScreen.Notifications.route) { Text("Notifications Screen") }
+        composable(route = BottomBarScreen.Browse.route) {
+            val context = LocalContext.current
+            val sessionManager = SessionManager(context)
+            val userId = sessionManager.getUserId() ?: 0L
+
+            BrowseFoodItemScreen(
+                userId = userId,
+                viewModel = browseFoodItemViewModel
+            )
+        }
+        composable(route = BottomBarScreen.Notifications.route) {
+            val context = LocalContext.current
+            val sessionManager = SessionManager(context)
+            val userId = sessionManager.getUserId() ?: 0L
+            NotificationScreen(
+                userId = userId,
+                viewModel = notificationViewModel
+            )
+        }
         composable(route = BottomBarScreen.Settings.route) {
             SettingsScreen(
                 viewModel = settingsViewModel,

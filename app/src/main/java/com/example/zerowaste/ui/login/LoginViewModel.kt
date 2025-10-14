@@ -27,7 +27,7 @@ class LoginViewModel(application: Application) : AndroidViewModel(application) {
     private val sessionManager = SessionManager(application)
     // --- THIS IS THE KEY CHANGE ---
     // Get the API service instance from the updated RetrofitClient
-    private val apiService = RetrofitClient.getInstance(application)
+    private val apiService = RetrofitClient.getAuthApi(application)
 
     private val _uiState = MutableStateFlow(LoginUiState.EnteringCredentials)
     val uiState: StateFlow<LoginUiState> = _uiState
