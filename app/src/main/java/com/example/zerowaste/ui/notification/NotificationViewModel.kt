@@ -3,67 +3,82 @@ package com.example.zerowaste.ui.notification
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.zerowaste.data.remote.NotificationResponse
-import com.example.zerowaste.data.remote.RetrofitClient // Assuming RetrofitClient is in this package
+import com.example.zerowaste.data.remote.RetrofitClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-// The UI state now uses the new NotificationResponse class
+enum class NotificationFilter { ALL, UNREAD }
+
 data class NotificationUiState(
     val notifications: List<NotificationResponse> = emptyList(),
     val isLoading: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val filter: NotificationFilter = NotificationFilter.ALL
 )
 
 class NotificationViewModel : ViewModel() {
 
-    // Assuming RetrofitClient provides an instance of the new NotificationApiService
     private val apiService = RetrofitClient.notifApiService
 
     private val _uiState = MutableStateFlow(NotificationUiState())
     val uiState = _uiState.asStateFlow()
 
-    fun fetchNotifications(userId: Long) {
+    fun fetchNotifications(userId: Long, unreadOnly: Boolean = false) {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+            _uiState.update { it.copy(isLoading = true, error = null) }
             try {
-                // Call the new service method
-                val response = apiService.getNotificationList(userId)
-                android.util.Log.d("API_FETCH", "Response for user $userId: $response")
+                val response = if (unreadOnly) {
+                    apiService.getUnreadNotificationList(userId)
+                } else {
+                    apiService.getNotificationList(userId)
+                }
+
                 if (response.isSuccessful) {
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            // The response body is now ResponseDTO, so we access its `data` property
-                            notifications = response.body()?.data ?: emptyList()
+                            notifications = response.body()?.data ?: emptyList(),
+                            filter = if (unreadOnly) NotificationFilter.UNREAD else NotificationFilter.ALL
                         )
                     }
                 } else {
-                    _uiState.update { it.copy(isLoading = false, error = "Failed to load notifications") }
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            error = "Failed to load ${if (unreadOnly) "unread" else "all"} notifications."
+                        )
+                    }
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, error = "An error occurred: ${e.message}") }
+                _uiState.update {
+                    it.copy(isLoading = false, error = "Error: ${e.message}")
+                }
             }
         }
     }
 
     fun markNotificationAsRead(notification: NotificationResponse) {
         if (notification.markAsRead) return
+
         viewModelScope.launch {
             try {
                 val response = apiService.markAsRead(notification.id)
                 if (response.isSuccessful) {
-                    _uiState.update { currentState ->
-                        val updatedList = currentState.notifications.map {
-                            // Use the returned object from the API to update the item
-                            if (it.id == response.body()?.data?.id) response.body()!!.data else it
-                        }
-                        currentState.copy(notifications = updatedList)
+                    val updated = response.body()?.data
+                    _uiState.update { state ->
+                        state.copy(
+                            notifications = state.notifications.map {
+                                if (it.id == updated?.id) updated else it
+                            }
+                        )
                     }
+                } else {
+                    _uiState.update { it.copy(error = "Failed to mark notification as read.") }
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = "Failed to mark as read") }
+                _uiState.update { it.copy(error = "Error marking as read: ${e.message}") }
             }
         }
     }
@@ -73,13 +88,16 @@ class NotificationViewModel : ViewModel() {
             try {
                 val response = apiService.deleteNotification(notificationId)
                 if (response.isSuccessful) {
-                    _uiState.update { currentState ->
-                        val updatedList = currentState.notifications.filterNot { it.id == notificationId }
-                        currentState.copy(notifications = updatedList)
+                    _uiState.update { state ->
+                        state.copy(
+                            notifications = state.notifications.filterNot { it.id == notificationId }
+                        )
                     }
+                } else {
+                    _uiState.update { it.copy(error = "Failed to delete notification.") }
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = "Failed to delete notification") }
+                _uiState.update { it.copy(error = "Error deleting: ${e.message}") }
             }
         }
     }
@@ -90,9 +108,11 @@ class NotificationViewModel : ViewModel() {
                 val response = apiService.deleteAllNotifications(userId)
                 if (response.isSuccessful) {
                     _uiState.update { it.copy(notifications = emptyList()) }
+                } else {
+                    _uiState.update { it.copy(error = "Failed to delete all notifications.") }
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = "Failed to delete all notifications") }
+                _uiState.update { it.copy(error = "Error deleting all: ${e.message}") }
             }
         }
     }

@@ -188,8 +188,8 @@ fun BottomNavGraph(
         composable(route = BottomBarScreen.Notifications.route) {
             // TODO: Replace '1L' with the actual logged-in user ID from your session state
             NotificationScreen(
-                currentUserId = 1L,
-                viewModel = notificationViewModel
+                userId = TODO(),
+                viewModel = TODO()
             )
         }
         composable(route = BottomBarScreen.Settings.route) {

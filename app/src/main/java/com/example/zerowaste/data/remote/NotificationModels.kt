@@ -4,8 +4,7 @@ import com.google.gson.annotations.SerializedName
 import java.util.Date
 
 /**
- * A generic class that matches your backend's ResponseDTO wrapper.
- * Your BaseController creates this structure for every response.
+ * Generic response wrapper (matches backend ResponseDTO)
  */
 data class ResponseDTO<T>(
     @SerializedName("data")
@@ -13,14 +12,12 @@ data class ResponseDTO<T>(
 )
 
 /**
- * This data class represents a single notification object.
- * It's designed to perfectly match the fields in your NotificationResDTO.java.
+ * Notification model matching backend NotificationResDTO
  */
 data class NotificationResponse(
     @SerializedName("id")
     val id: Long,
 
-    // IMPORTANT: This must be java.util.Date to correctly parse the JSON from your backend.
     @SerializedName("createdAt")
     val createdAt: Date,
 
@@ -35,10 +32,18 @@ data class NotificationResponse(
 
     @SerializedName("notifType")
     val notifType: NotificationType
-)
+) {
+    val title: String
+        get() = when (notifType) {
+            NotificationType.FOOD_INVENTORY_ALERT -> "Inventory Alert!"
+            NotificationType.DONATION_POSTED -> "Donation Posted"
+            NotificationType.DONATION_CLAIMED -> "Claimed Donation"
+            NotificationType.MEAL_REMINDER -> "Meal Planner Reminder"
+        }
+}
 
 /**
- * This enum mirrors your backend's NotificationType enum for type safety.
+ * Enum mirrors backend NotificationType
  */
 enum class NotificationType {
     FOOD_INVENTORY_ALERT,
