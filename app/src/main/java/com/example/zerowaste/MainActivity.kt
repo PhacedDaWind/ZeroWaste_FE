@@ -16,12 +16,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.*
+import androidx.navigation.navArgument
 import com.example.zerowaste.data.local.SessionManager
+import com.example.zerowaste.ui.browse.BrowseFoodItemScreen
+import com.example.zerowaste.ui.browse.BrowseFoodItemViewModel
+import com.example.zerowaste.ui.fooddetail.FoodItemDetailScreen
+import com.example.zerowaste.ui.fooddetail.FoodItemDetailViewModel
 import com.example.zerowaste.ui.home.HomeScreen
 import com.example.zerowaste.ui.home.HomeViewModel
 import com.example.zerowaste.ui.login.LoginFlow
@@ -32,11 +39,10 @@ import com.example.zerowaste.ui.passwordreset.PasswordResetFlow
 import com.example.zerowaste.ui.passwordreset.PasswordResetViewModel
 import com.example.zerowaste.ui.registration.RegistrationScreen
 import com.example.zerowaste.ui.registration.RegistrationViewModel
-import com.example.zerowaste.ui.screens.BrowseFoodItemScreen
 import com.example.zerowaste.ui.screens.main.SettingsViewModel
 import com.example.zerowaste.ui.setting.SettingsScreen
 import com.example.zerowaste.ui.theme.ZeroWasteTheme
-import com.example.zerowaste.viewmodel.BrowseFoodItemViewModel
+
 
 // Sealed class for Bottom Bar routes remains the same
 sealed class BottomBarScreen(
@@ -65,13 +71,13 @@ class MainActivity : ComponentActivity() {
             ZeroWasteTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     AppNavigation(
-                        loginViewModel = loginViewModel,
-                        registrationViewModel = registrationViewModel,
-                        homeViewModel = homeViewModel,
-                        settingsViewModel = settingsViewModel,
-                        notificationViewModel = notificationViewModel,
-                        browseFoodItemViewModel = browseFoodItemViewModel,
-                        passwordResetViewModel = passwordResetViewModel // Pass it down
+                        loginViewModel,
+                        registrationViewModel,
+                        homeViewModel,
+                        settingsViewModel,
+                        notificationViewModel,
+                        browseFoodItemViewModel,
+                        passwordResetViewModel
                     )
                 }
             }
@@ -87,50 +93,77 @@ fun AppNavigation(
     settingsViewModel: SettingsViewModel,
     notificationViewModel: NotificationViewModel,
     browseFoodItemViewModel: BrowseFoodItemViewModel,
-    passwordResetViewModel: PasswordResetViewModel // Receive
+    passwordResetViewModel: PasswordResetViewModel
 ) {
     val navController = rememberNavController()
-    NavHost(navController = navController, startDestination = "auth") {
-        navigation(startDestination = "login", route = "auth") {
-            composable("login") {
-                LoginFlow(
-                    viewModel = loginViewModel,
-                    onNavigateToRegister = { navController.navigate("register") },
-                    // --- NEW: Add navigation to the password reset flow ---
-                    onNavigateToForgotPassword = { navController.navigate("password_reset") },
-                    onLoginSuccess = {
-                        navController.navigate("main") {
-                            popUpTo("auth") { inclusive = true }
+    NavHost(navController = navController, startDestination = "login") {
+        composable("login") {
+            LoginFlow(
+                viewModel = loginViewModel,
+                onNavigateToRegister = { navController.navigate("register") },
+                onNavigateToForgotPassword = { navController.navigate("password_reset") },
+                onLoginSuccess = {
+                    navController.navigate("main") {
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            inclusive = true
                         }
                     }
-                )
-            }
-            composable("register") {
-                RegistrationScreen(
-                    viewModel = registrationViewModel,
-                    onNavigateToLogin = { navController.popBackStack() },
-                    onRegistrationSuccess = { navController.popBackStack() }
-                )
-            }
-            composable("password_reset") {
-                PasswordResetFlow(
-                    viewModel = passwordResetViewModel,
-                    onNavigateBackToLogin = {
-                        passwordResetViewModel.resetFlow()
-                        navController.popBackStack()
-                    }
-                )
-            }
-        }
-        composable("main") {
-            MainAppScreen(
-                appNavController = navController,
-                homeViewModel = homeViewModel,
-                settingsViewModel = settingsViewModel,
-                loginViewModel = loginViewModel,
-                notificationViewModel = notificationViewModel,
-                browseFoodItemViewModel = browseFoodItemViewModel
+                }
             )
+        }
+        composable("register") {
+            RegistrationScreen(
+                viewModel = registrationViewModel,
+                onNavigateToLogin = { navController.popBackStack() },
+                onRegistrationSuccess = { navController.popBackStack() }
+            )
+        }
+        composable("password_reset") {
+            PasswordResetFlow(
+                viewModel = passwordResetViewModel,
+                onNavigateBackToLogin = {
+                    passwordResetViewModel.resetFlow()
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        navigation(startDestination = "main_screens", route = "main") {
+            composable("main_screens") {
+                // The onLogout logic is now defined here
+                MainAppScreen(
+                    homeViewModel = homeViewModel,
+                    settingsViewModel = settingsViewModel,
+                    loginViewModel = loginViewModel,
+                    notificationViewModel = notificationViewModel,
+                    browseFoodItemViewModel = browseFoodItemViewModel,
+                    onLogout = {
+                        loginViewModel.clearLoginResult()
+                        navController.navigate("login") {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                inclusive = true
+                            }
+                            launchSingleTop = true
+                        }
+                    },
+                    // We also pass the main NavController for detail navigation
+                    appNavController = navController
+                )
+            }
+            composable(
+                route = "food_detail/{itemId}",
+                arguments = listOf(navArgument("itemId") { type = NavType.LongType })
+            ) { backStackEntry ->
+                val viewModel: FoodItemDetailViewModel = viewModel()
+                val itemId = backStackEntry.arguments?.getLong("itemId")
+                if (itemId != null) {
+                    FoodItemDetailScreen(
+                        itemId = itemId,
+                        viewModel = viewModel,
+                        navController = navController
+                    )
+                }
+            }
         }
     }
 }
@@ -138,11 +171,12 @@ fun AppNavigation(
 @Composable
 fun MainAppScreen(
     appNavController: NavController,
-    homeViewModel: HomeViewModel, // Pass down
-    settingsViewModel: SettingsViewModel, // Pass down
+    homeViewModel: HomeViewModel,
+    settingsViewModel: SettingsViewModel,
     loginViewModel: LoginViewModel,
     notificationViewModel: NotificationViewModel,
-    browseFoodItemViewModel: BrowseFoodItemViewModel
+    browseFoodItemViewModel: BrowseFoodItemViewModel,
+    onLogout: () -> Unit // It now accepts both NavController and onLogout
 ) {
     val bottomNavController = rememberNavController()
     Scaffold(
@@ -150,18 +184,20 @@ fun MainAppScreen(
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding)) {
             BottomNavGraph(
+                // --- THIS IS THE FIX ---
+                // We pass the CORRECT appNavController down from the parameters
                 appNavController = appNavController,
                 bottomNavController = bottomNavController,
                 homeViewModel = homeViewModel,
                 settingsViewModel = settingsViewModel,
-                loginViewModel = loginViewModel, // <-- Pass LoginViewModel to the bottom graph
-                notificationViewModel=notificationViewModel,
-                browseFoodItemViewModel = browseFoodItemViewModel// Pass down
+                loginViewModel = loginViewModel,
+                notificationViewModel = notificationViewModel,
+                browseFoodItemViewModel = browseFoodItemViewModel,
+                onLogout = onLogout // And we also pass the onLogout lambda
             )
         }
     }
 }
-// BottomBar composable remains the same...
 @Composable
 fun BottomBar(navController: NavHostController) {
     val screens = listOf(
@@ -193,15 +229,17 @@ fun BottomBar(navController: NavHostController) {
 
 
 
+
 @Composable
 fun BottomNavGraph(
     appNavController: NavController,
     bottomNavController: NavHostController,
     homeViewModel: HomeViewModel,
     settingsViewModel: SettingsViewModel,
-    loginViewModel: LoginViewModel, // <-- Receive LoginViewModel
+    loginViewModel: LoginViewModel,
     notificationViewModel: NotificationViewModel,
-    browseFoodItemViewModel: BrowseFoodItemViewModel// Receive
+    browseFoodItemViewModel: BrowseFoodItemViewModel,
+    onLogout: () -> Unit // It correctly accepts the onLogout lambda
 ) {
     NavHost(
         navController = bottomNavController,
@@ -211,38 +249,19 @@ fun BottomNavGraph(
             HomeScreen(viewModel = homeViewModel)
         }
         composable(route = BottomBarScreen.Browse.route) {
-            val context = LocalContext.current
-            val sessionManager = SessionManager(context)
-            val userId = sessionManager.getUserId() ?: 0L
-
             BrowseFoodItemScreen(
-                userId = userId,
-                viewModel = browseFoodItemViewModel
+                viewModel = browseFoodItemViewModel,
+                appNavController = appNavController
             )
         }
         composable(route = BottomBarScreen.Notifications.route) {
-            val context = LocalContext.current
-            val sessionManager = SessionManager(context)
-            val userId = sessionManager.getUserId() ?: 0L
-            NotificationScreen(
-                userId = userId,
-                viewModel = notificationViewModel
-            )
+            NotificationScreen(viewModel = notificationViewModel)
         }
         composable(route = BottomBarScreen.Settings.route) {
             SettingsScreen(
                 viewModel = settingsViewModel,
-                onLogout = {
-                    // --- THIS IS THE KEY FIX ---
-                    // 1. Clear the old login state
-                    loginViewModel.clearLoginResult()
-                    // 2. Navigate back to the auth flow
-                    appNavController.navigate("auth") {
-                        popUpTo("main") { inclusive = true }
-                    }
-                }
+                onLogout = onLogout // It correctly passes the lambda to the SettingsScreen
             )
         }
     }
 }
-
