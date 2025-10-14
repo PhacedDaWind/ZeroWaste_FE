@@ -87,9 +87,6 @@ fun HeaderSection(username: String) {
                 lineHeight = 24.sp
             )
         }
-        IconButton(onClick = { /* TODO: Handle info click */ }) {
-            Icon(Icons.Default.Info, contentDescription = "Info")
-        }
     }
 }
 

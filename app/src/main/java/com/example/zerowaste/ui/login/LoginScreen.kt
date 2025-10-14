@@ -24,6 +24,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 // ... other necessary imports
@@ -33,9 +34,11 @@ import com.example.zerowaste.ui.login.LoginUiState
 
 // This is the main entry point for the entire login flow
 @Composable
-fun LoginScreen(
-    navController: NavController,
-    viewModel: LoginViewModel
+fun LoginFlow(
+    viewModel: LoginViewModel,
+    onNavigateToRegister: () -> Unit,
+    onNavigateToForgotPassword: () -> Unit, // <-- 1. ADD THIS PARAMETER
+    onLoginSuccess: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -45,19 +48,20 @@ fun LoginScreen(
         finalLoginResult?.let { result ->
             result.onSuccess { token ->
                 Toast.makeText(context, "Login Complete! Welcome.", Toast.LENGTH_LONG).show()
-                // TODO: Navigate to the main app screen (e.g., "inventory")
-                // navController.navigate("inventory") { popUpTo("login") { inclusive = true } }
+                onLoginSuccess()
             }
             result.onFailure { error ->
                 Toast.makeText(context, error.message, Toast.LENGTH_LONG).show()
             }
         }
+        viewModel.clearLoginResult()
     }
 
     when (uiState) {
         LoginUiState.EnteringCredentials -> CredentialsScreen(
             onLoginClicked = { username, password -> viewModel.login(username, password) },
-            onNavigateToRegister = { navController.navigate("register") } // Use NavController
+            onNavigateToRegister = onNavigateToRegister,
+            onNavigateToForgotPassword = onNavigateToForgotPassword // <-- 2. PASS IT DOWN
         )
         LoginUiState.Entering2faCode -> TwoFactorAuthScreen(
             onVerifyClicked = { code -> viewModel.verify2faCode(code) }
@@ -65,27 +69,82 @@ fun LoginScreen(
     }
 }
 
-// --- CREDENTIALS SCREEN COMPOSABLE ---
+// --- THIS COMPOSABLE IS UPDATED ---
 @Composable
 fun CredentialsScreen(
     onLoginClicked: (String, String) -> Unit,
-    onNavigateToRegister: () -> Unit
+    onNavigateToRegister: () -> Unit,
+    onNavigateToForgotPassword: () -> Unit
 ) {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    // 1. NEW state variables to track errors
+    var isUsernameError by remember { mutableStateOf(false) }
+    var isPasswordError by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Login", style = MaterialTheme.typography.headlineMedium)
+        Text("Zerowaste", style = MaterialTheme.typography.headlineMedium)
         Spacer(modifier = Modifier.height(24.dp))
-        OutlinedTextField(value = username, onValueChange = { username = it }, label = { Text("Username") }, modifier = Modifier.fillMaxWidth())
+
+        // 2. UPDATED Username field
+        OutlinedTextField(
+            value = username,
+            onValueChange = {
+                username = it
+                if (isUsernameError) isUsernameError = false // Clear error on type
+            },
+            label = { Text("Username") },
+            modifier = Modifier.fillMaxWidth(),
+            isError = isUsernameError,
+            supportingText = {
+                if (isUsernameError) Text("Username cannot be empty", color = MaterialTheme.colorScheme.error)
+            }
+        )
         Spacer(modifier = Modifier.height(16.dp))
-        OutlinedTextField(value = password, onValueChange = { password = it }, label = { Text("Password") }, modifier = Modifier.fillMaxWidth(), visualTransformation = PasswordVisualTransformation())
+
+        // 3. UPDATED Password field
+        OutlinedTextField(
+            value = password,
+            onValueChange = {
+                password = it
+                if (isPasswordError) isPasswordError = false // Clear error on type
+            },
+            label = { Text("Password") },
+            modifier = Modifier.fillMaxWidth(),
+            visualTransformation = PasswordVisualTransformation(),
+            isError = isPasswordError,
+            supportingText = {
+                if (isPasswordError) Text("Password cannot be empty", color = MaterialTheme.colorScheme.error)
+            }
+        )
+
+        ClickableText(
+            text = AnnotatedString("Forgot Password?"),
+            onClick = { onNavigateToForgotPassword() },
+            style = TextStyle(color = MaterialTheme.colorScheme.primary, textAlign = TextAlign.End),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+        )
+
         Spacer(modifier = Modifier.height(24.dp))
-        Button(onClick = { onLoginClicked(username, password) }, modifier = Modifier.fillMaxWidth()) {
+
+        // 4. UPDATED Button with validation logic
+        Button(
+            onClick = {
+                // Reset errors before checking
+                isUsernameError = username.isBlank()
+                isPasswordError = password.isBlank()
+
+                // Only call the API if both fields are valid
+                if (!isUsernameError && !isPasswordError) {
+                    onLoginClicked(username, password)
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
             Text("Login")
         }
         Spacer(modifier = Modifier.height(16.dp))
@@ -124,39 +183,5 @@ fun TwoFactorAuthScreen(onVerifyClicked: (String) -> Unit) {
         ) {
             Text("Verify")
         }
-    }
-}
-
-
-// --- LOGIN FLOW COMPOSABLE (Navigator for Login/2FA) ---
-@Composable
-fun LoginFlow(viewModel: LoginViewModel, onNavigateToRegister: () -> Unit,
-              onLoginSuccess: () -> Unit) {
-    val uiState by viewModel.uiState.collectAsState()
-    val context = LocalContext.current
-
-    val finalLoginResult by viewModel.finalLoginResult.observeAsState()
-    LaunchedEffect(finalLoginResult) {
-        finalLoginResult?.let { result ->
-            result.onSuccess { token ->
-                Toast.makeText(context, "Login Complete! Welcome.", Toast.LENGTH_LONG).show()
-                onLoginSuccess() // <-- Make sure you call the function here
-            }
-            result.onFailure { error ->
-                Toast.makeText(context, error.message, Toast.LENGTH_LONG).show()
-            }
-        }
-    }
-
-
-    // This 'when' block automatically shows the correct screen based on ViewModel state
-    when (uiState) {
-        LoginUiState.EnteringCredentials -> CredentialsScreen(
-            onLoginClicked = { username, password -> viewModel.login(username, password) },
-            onNavigateToRegister = onNavigateToRegister
-        )
-        LoginUiState.Entering2faCode -> TwoFactorAuthScreen(
-            onVerifyClicked = { code -> viewModel.verify2faCode(code) }
-        )
     }
 }
