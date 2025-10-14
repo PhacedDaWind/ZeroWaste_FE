@@ -2,7 +2,6 @@ package com.example.zerowaste.ui.notification
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.zerowaste.data.local.SessionManager
 import com.example.zerowaste.data.remote.NotificationResponse
@@ -23,14 +22,21 @@ data class NotificationUiState(
 
 class NotificationViewModel(application: Application) : AndroidViewModel(application) {
     private val sessionManager = SessionManager(application)
-
     private val apiService = RetrofitClient.getNotificationApi(application)
 
     private val _uiState = MutableStateFlow(NotificationUiState())
     val uiState = _uiState.asStateFlow()
 
-    fun fetchNotifications(userId: Long, unreadOnly: Boolean = false) {
+    // --- UPDATED: This function no longer needs a userId parameter ---
+    fun fetchNotifications(unreadOnly: Boolean = false) {
         viewModelScope.launch {
+            // 1. Get the userId safely inside the ViewModel
+            val userId = sessionManager.getUserId()
+            if (userId == null) {
+                _uiState.update { it.copy(isLoading = false, error = "User not logged in.") }
+                return@launch
+            }
+
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
                 val response = if (unreadOnly) {
@@ -49,10 +55,7 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
                     }
                 } else {
                     _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            error = "Failed to load ${if (unreadOnly) "unread" else "all"} notifications."
-                        )
+                        it.copy(isLoading = false, error = "Failed to load notifications.")
                     }
                 }
             } catch (e: Exception) {
@@ -65,7 +68,6 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
 
     fun markNotificationAsRead(notification: NotificationResponse) {
         if (notification.markAsRead) return
-
         viewModelScope.launch {
             try {
                 val response = apiService.markAsRead(notification.id)
@@ -79,7 +81,7 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
                         )
                     }
                 } else {
-                    _uiState.update { it.copy(error = "Failed to mark notification as read.") }
+                    _uiState.update { it.copy(error = "Failed to mark as read.") }
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(error = "Error marking as read: ${e.message}") }
@@ -93,9 +95,7 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
                 val response = apiService.deleteNotification(notificationId)
                 if (response.isSuccessful) {
                     _uiState.update { state ->
-                        state.copy(
-                            notifications = state.notifications.filterNot { it.id == notificationId }
-                        )
+                        state.copy(notifications = state.notifications.filterNot { it.id == notificationId })
                     }
                 } else {
                     _uiState.update { it.copy(error = "Failed to delete notification.") }
@@ -106,8 +106,15 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
         }
     }
 
-    fun deleteAllNotifications(userId: Long) {
+    // --- UPDATED: This function also gets the userId itself ---
+    fun deleteAllNotifications() {
         viewModelScope.launch {
+            val userId = sessionManager.getUserId()
+            if (userId == null) {
+                _uiState.update { it.copy(error = "User not logged in.") }
+                return@launch
+            }
+
             try {
                 val response = apiService.deleteAllNotifications(userId)
                 if (response.isSuccessful) {
