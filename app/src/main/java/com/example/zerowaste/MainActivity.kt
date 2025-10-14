@@ -24,6 +24,8 @@ import com.example.zerowaste.ui.home.HomeScreen
 import com.example.zerowaste.ui.home.HomeViewModel
 import com.example.zerowaste.ui.login.LoginFlow
 import com.example.zerowaste.ui.login.LoginViewModel
+import com.example.zerowaste.ui.notification.NotificationScreen
+import com.example.zerowaste.ui.notification.NotificationViewModel
 import com.example.zerowaste.ui.registration.RegistrationScreen
 import com.example.zerowaste.ui.registration.RegistrationViewModel
 import com.example.zerowaste.ui.setting.SettingsScreen
@@ -48,6 +50,8 @@ class MainActivity : ComponentActivity() {
     // --- NEW: Instantiate Home and Settings ViewModels ---
     private val homeViewModel: HomeViewModel by viewModels()
     private val settingsViewModel: SettingsViewModel by viewModels()
+    // --- 2. Create an instance of NotificationViewModel ---
+    private val notificationViewModel: NotificationViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,7 +62,8 @@ class MainActivity : ComponentActivity() {
                         loginViewModel = loginViewModel,
                         registrationViewModel = registrationViewModel,
                         homeViewModel = homeViewModel,
-                        settingsViewModel = settingsViewModel
+                        settingsViewModel = settingsViewModel,
+                        notificationViewModel = notificationViewModel
                     )
                 }
             }
@@ -71,7 +76,8 @@ fun AppNavigation(
     loginViewModel: LoginViewModel,
     registrationViewModel: RegistrationViewModel,
     homeViewModel: HomeViewModel, // Pass down
-    settingsViewModel: SettingsViewModel // Pass down
+    settingsViewModel: SettingsViewModel,
+    notificationViewModel: NotificationViewModel// Pass down
 ) {
     val navController = rememberNavController()
     NavHost(navController = navController, startDestination = "auth") {
@@ -99,7 +105,8 @@ fun AppNavigation(
             MainAppScreen(
                 appNavController = navController,
                 homeViewModel = homeViewModel, // Pass down
-                settingsViewModel = settingsViewModel // Pass down
+                settingsViewModel = settingsViewModel,
+                notificationViewModel= notificationViewModel// Pass down
             )
         }
     }
@@ -110,7 +117,8 @@ fun AppNavigation(
 fun MainAppScreen(
     appNavController: NavController,
     homeViewModel: HomeViewModel, // Pass down
-    settingsViewModel: SettingsViewModel // Pass down
+    settingsViewModel: SettingsViewModel,
+    notificationViewModel: NotificationViewModel// Pass down
 ) {
     val bottomNavController = rememberNavController()
     Scaffold(
@@ -121,7 +129,8 @@ fun MainAppScreen(
                 appNavController = appNavController,
                 bottomNavController = bottomNavController,
                 homeViewModel = homeViewModel, // Pass down
-                settingsViewModel = settingsViewModel // Pass down
+                settingsViewModel = settingsViewModel,
+                notificationViewModel=notificationViewModel// Pass down
             )
         }
     }
@@ -164,7 +173,8 @@ fun BottomNavGraph(
     appNavController: NavController,
     bottomNavController: NavHostController,
     homeViewModel: HomeViewModel, // Receive
-    settingsViewModel: SettingsViewModel // Receive
+    settingsViewModel: SettingsViewModel,
+    notificationViewModel: NotificationViewModel// Receive
 ) {
     NavHost(
         navController = bottomNavController,
@@ -175,7 +185,13 @@ fun BottomNavGraph(
             HomeScreen(viewModel = homeViewModel)
         }
         composable(route = BottomBarScreen.Browse.route) { Text("Browse Screen") }
-        composable(route = BottomBarScreen.Notifications.route) { Text("Notifications Screen") }
+        composable(route = BottomBarScreen.Notifications.route) {
+            // TODO: Replace '1L' with the actual logged-in user ID from your session state
+            NotificationScreen(
+                currentUserId = 1L,
+                viewModel = notificationViewModel
+            )
+        }
         composable(route = BottomBarScreen.Settings.route) {
             // Pass the ViewModel to the screen
             SettingsScreen(

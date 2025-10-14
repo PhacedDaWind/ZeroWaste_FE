@@ -30,6 +30,7 @@ class NotificationViewModel : ViewModel() {
             try {
                 // Call the new service method
                 val response = apiService.getNotificationList(userId)
+                android.util.Log.d("API_FETCH", "Response for user $userId: $response")
                 if (response.isSuccessful) {
                     _uiState.update {
                         it.copy(
