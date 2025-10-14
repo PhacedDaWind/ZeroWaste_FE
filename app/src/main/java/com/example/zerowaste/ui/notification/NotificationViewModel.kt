@@ -1,77 +1,102 @@
-package com.example.zerowaste.viewmodel
+package com.example.zerowaste.ui.notification
 
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.zerowaste.data.remote.NotificationResponse
-import com.example.zerowaste.data.repository.NotificationRepository
+import com.example.zerowaste.data.remote.RetrofitClient // Assuming RetrofitClient is in this package
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import retrofit2.HttpException
-import java.io.IOException
 
-/**
- * The ViewModel holds the UI state and business logic. It survives configuration
- * changes (like screen rotation) and provides data to the UI via LiveData.
- */
+// The UI state now uses the new NotificationResponse class
+data class NotificationUiState(
+    val notifications: List<NotificationResponse> = emptyList(),
+    val isLoading: Boolean = false,
+    val error: String? = null
+)
+
 class NotificationViewModel : ViewModel() {
 
-    private val repository = NotificationRepository()
+    // Assuming RetrofitClient provides an instance of the new NotificationApiService
+    private val apiService = RetrofitClient.notifApiService
 
-    // LiveData holding the list of notifications for the UI to observe.
-    private val _notifications = MutableLiveData<List<NotificationResponse>>()
-    val notifications: LiveData<List<NotificationResponse>> = _notifications
+    private val _uiState = MutableStateFlow(NotificationUiState())
+    val uiState = _uiState.asStateFlow()
 
-    // LiveData for showing/hiding a loading spinner.
-    private val _isLoading = MutableLiveData<Boolean>()
-    val isLoading: LiveData<Boolean> = _isLoading
-
-    // LiveData for displaying error messages.
-    private val _error = MutableLiveData<String>()
-    val error: LiveData<String> = _error
-
-    /**
-     * Fetches the list of notifications from the repository.
-     */
     fun fetchNotifications(userId: Long) {
-        _isLoading.value = true
         viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
             try {
-                val response = repository.getNotifications(userId)
+                // Call the new service method
+                val response = apiService.getNotificationList(userId)
                 if (response.isSuccessful) {
-                    // Extract the list from the 'data' field of the ResponseDTO
-                    _notifications.postValue(response.body()?.data)
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            // The response body is now ResponseDTO, so we access its `data` property
+                            notifications = response.body()?.data ?: emptyList()
+                        )
+                    }
                 } else {
-                    _error.postValue("API Error: ${response.code()} ${response.message()}")
+                    _uiState.update { it.copy(isLoading = false, error = "Failed to load notifications") }
                 }
-            } catch (e: HttpException) {
-                _error.postValue("Server Error: ${e.message()}")
-            } catch (e: IOException) {
-                _error.postValue("Network Error: Please check your connection.")
             } catch (e: Exception) {
-                _error.postValue("An unexpected error occurred: ${e.message}")
-            } finally {
-                _isLoading.postValue(false)
+                _uiState.update { it.copy(isLoading = false, error = "An error occurred: ${e.message}") }
             }
         }
     }
 
-    /**
-     * Marks a specific notification as read and then refreshes the list.
-     */
-    fun markNotificationAsRead(notificationId: Long, currentUserId: Long) {
+    fun markNotificationAsRead(notification: NotificationResponse) {
+        if (notification.markAsRead) return
         viewModelScope.launch {
             try {
-                val response = repository.markAsRead(notificationId)
+                val response = apiService.markAsRead(notification.id)
                 if (response.isSuccessful) {
-                    // Refresh the list to show the visual change (e.g., un-bolding text)
-                    fetchNotifications(currentUserId)
-                } else {
-                    _error.postValue("Failed to mark as read.")
+                    _uiState.update { currentState ->
+                        val updatedList = currentState.notifications.map {
+                            // Use the returned object from the API to update the item
+                            if (it.id == response.body()?.data?.id) response.body()!!.data else it
+                        }
+                        currentState.copy(notifications = updatedList)
+                    }
                 }
             } catch (e: Exception) {
-                _error.postValue("Error marking notification as read: ${e.message}")
+                _uiState.update { it.copy(error = "Failed to mark as read") }
             }
         }
+    }
+
+    fun deleteNotification(notificationId: Long) {
+        viewModelScope.launch {
+            try {
+                val response = apiService.deleteNotification(notificationId)
+                if (response.isSuccessful) {
+                    _uiState.update { currentState ->
+                        val updatedList = currentState.notifications.filterNot { it.id == notificationId }
+                        currentState.copy(notifications = updatedList)
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = "Failed to delete notification") }
+            }
+        }
+    }
+
+    fun deleteAllNotifications(userId: Long) {
+        viewModelScope.launch {
+            try {
+                val response = apiService.deleteAllNotifications(userId)
+                if (response.isSuccessful) {
+                    _uiState.update { it.copy(notifications = emptyList()) }
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = "Failed to delete all notifications") }
+            }
+        }
+    }
+
+    fun clearError() {
+        _uiState.update { it.copy(error = null) }
     }
 }

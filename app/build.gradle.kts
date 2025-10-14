@@ -81,9 +81,23 @@ dependencies {
     // --- Coroutines for Asynchronous Programming ---
     // Android-specific extensions for Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    implementation(platform("androidx.compose:compose-bom:2024.05.00"))
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-graphics")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.material3:material3")
 
+    // ADD THIS: For Icons.Extended (e.g., DeleteSweep)
+    implementation("androidx.compose.material:material-icons-extended")
 
-    // --- Testing ---
+    // ADD THIS: For pull-to-refresh and ExperimentalMaterialApi
+    // Note: Pull-to-refresh is currently in the M2 library, not M3
+    implementation("androidx.compose.material:material:1.6.7")
+
+    // ADD THIS: For the viewModel() composable function
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+
+        // --- Testing ---
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")
