@@ -1,98 +1,192 @@
 package com.example.zerowaste
 
+// Import the new ViewModels
 import android.os.Bundle
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.text.ClickableText
-import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.runtime.livedata.observeAsState
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.unit.dp
-import com.example.zerowaste.data.remote.RegistrationRequest
-import com.example.zerowaste.ui.login.CredentialsScreen
-import com.example.zerowaste.ui.login.LoginUiState
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.navigation.NavController
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.*
+import com.example.zerowaste.ui.home.HomeScreen
+import com.example.zerowaste.ui.home.HomeViewModel
+import com.example.zerowaste.ui.login.LoginFlow
 import com.example.zerowaste.ui.login.LoginViewModel
-import com.example.zerowaste.ui.login.TwoFactorAuthScreen
 import com.example.zerowaste.ui.registration.RegistrationScreen
 import com.example.zerowaste.ui.registration.RegistrationViewModel
+import com.example.zerowaste.ui.setting.SettingsScreen
+import com.example.zerowaste.ui.setting.SettingsViewModel
 import com.example.zerowaste.ui.theme.ZeroWasteTheme
+
+// Sealed class for Bottom Bar routes remains the same
+sealed class BottomBarScreen(
+    val route: String,
+    val title: String,
+    val icon: ImageVector
+) {
+    object Home : BottomBarScreen("home", "Home", Icons.Default.Home)
+    object Browse : BottomBarScreen("browse", "Browse", Icons.Default.Search)
+    object Notifications : BottomBarScreen("notifications", "Notifications", Icons.Default.Notifications)
+    object Settings : BottomBarScreen("settings", "Settings", Icons.Default.Settings)
+}
 
 class MainActivity : ComponentActivity() {
     private val loginViewModel: LoginViewModel by viewModels()
     private val registrationViewModel: RegistrationViewModel by viewModels()
+    // --- NEW: Instantiate Home and Settings ViewModels ---
+    private val homeViewModel: HomeViewModel by viewModels()
+    private val settingsViewModel: SettingsViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             ZeroWasteTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    // This state controls which main screen is shown (Login or Register)
-                    var showLoginScreen by remember { mutableStateOf(true) }
-
-                    if (showLoginScreen) {
-                        LoginFlow(
-                            viewModel = loginViewModel,
-                            onNavigateToRegister = { showLoginScreen = false } // Lambda to switch to register
-                        )
-                    } else {
-                        RegistrationScreen(
-                            viewModel = registrationViewModel,
-                            onNavigateToLogin = { showLoginScreen = true }, // Lambda to switch back to login
-                            onRegistrationSuccess = {
-                                // After successful registration, automatically switch to the login screen
-                                showLoginScreen = true
-                            }
-                        )
-                    }
+                    AppNavigation(
+                        loginViewModel = loginViewModel,
+                        registrationViewModel = registrationViewModel,
+                        homeViewModel = homeViewModel,
+                        settingsViewModel = settingsViewModel
+                    )
                 }
             }
         }
     }
 }
 
-
-// --- LOGIN FLOW COMPOSABLE (Navigator for Login/2FA) ---
 @Composable
-fun LoginFlow(viewModel: LoginViewModel, onNavigateToRegister: () -> Unit) {
-    val uiState by viewModel.uiState.collectAsState()
-    val context = LocalContext.current
-
-    val finalLoginResult by viewModel.finalLoginResult.observeAsState()
-    LaunchedEffect(finalLoginResult) {
-        finalLoginResult?.let { result ->
-            result.onSuccess { token ->
-                Toast.makeText(context, "Login Complete! Welcome.", Toast.LENGTH_LONG).show()
-                // TODO: Save the token and navigate to the main part of the app
+fun AppNavigation(
+    loginViewModel: LoginViewModel,
+    registrationViewModel: RegistrationViewModel,
+    homeViewModel: HomeViewModel, // Pass down
+    settingsViewModel: SettingsViewModel // Pass down
+) {
+    val navController = rememberNavController()
+    NavHost(navController = navController, startDestination = "auth") {
+        navigation(startDestination = "login", route = "auth") {
+            composable("login") {
+                LoginFlow(
+                    viewModel = loginViewModel,
+                    onNavigateToRegister = { navController.navigate("register") },
+                    onLoginSuccess = {
+                        navController.navigate("main") {
+                            popUpTo("auth") { inclusive = true }
+                        }
+                    }
+                )
             }
-            result.onFailure { error ->
-                Toast.makeText(context, error.message, Toast.LENGTH_LONG).show()
+            composable("register") {
+                RegistrationScreen(
+                    viewModel = registrationViewModel,
+                    onNavigateToLogin = { navController.popBackStack() },
+                    onRegistrationSuccess = { navController.popBackStack() }
+                )
             }
         }
-    }
-
-    // This 'when' block automatically shows the correct screen based on ViewModel state
-    when (uiState) {
-        LoginUiState.EnteringCredentials -> CredentialsScreen(
-            onLoginClicked = { username, password -> viewModel.login(username, password) },
-            onNavigateToRegister = onNavigateToRegister
-        )
-        LoginUiState.Entering2faCode -> TwoFactorAuthScreen(
-            onVerifyClicked = { code -> viewModel.verify2faCode(code) }
-        )
+        composable("main") {
+            MainAppScreen(
+                appNavController = navController,
+                homeViewModel = homeViewModel, // Pass down
+                settingsViewModel = settingsViewModel // Pass down
+            )
+        }
     }
 }
 
 
+@Composable
+fun MainAppScreen(
+    appNavController: NavController,
+    homeViewModel: HomeViewModel, // Pass down
+    settingsViewModel: SettingsViewModel // Pass down
+) {
+    val bottomNavController = rememberNavController()
+    Scaffold(
+        bottomBar = { BottomBar(navController = bottomNavController) }
+    ) { innerPadding ->
+        Box(modifier = Modifier.padding(innerPadding)) {
+            BottomNavGraph(
+                appNavController = appNavController,
+                bottomNavController = bottomNavController,
+                homeViewModel = homeViewModel, // Pass down
+                settingsViewModel = settingsViewModel // Pass down
+            )
+        }
+    }
+}
+
+// BottomBar composable remains the same...
+@Composable
+fun BottomBar(navController: NavHostController) {
+    val screens = listOf(
+        BottomBarScreen.Home,
+        BottomBarScreen.Browse,
+        BottomBarScreen.Notifications,
+        BottomBarScreen.Settings,
+    )
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentDestination = navBackStackEntry?.destination
+
+    NavigationBar {
+        screens.forEach { screen ->
+            NavigationBarItem(
+                icon = { Icon(screen.icon, contentDescription = null) },
+                label = { Text(screen.title) },
+                selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                onClick = {
+                    navController.navigate(screen.route) {
+                        popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            )
+        }
+    }
+}
+
+
+
+@Composable
+fun BottomNavGraph(
+    appNavController: NavController,
+    bottomNavController: NavHostController,
+    homeViewModel: HomeViewModel, // Receive
+    settingsViewModel: SettingsViewModel // Receive
+) {
+    NavHost(
+        navController = bottomNavController,
+        startDestination = BottomBarScreen.Home.route
+    ) {
+        composable(route = BottomBarScreen.Home.route) {
+            // Pass the ViewModel to the screen
+            HomeScreen(viewModel = homeViewModel)
+        }
+        composable(route = BottomBarScreen.Browse.route) { Text("Browse Screen") }
+        composable(route = BottomBarScreen.Notifications.route) { Text("Notifications Screen") }
+        composable(route = BottomBarScreen.Settings.route) {
+            // Pass the ViewModel to the screen
+            SettingsScreen(
+                viewModel = settingsViewModel,
+                onLogout = {
+                    appNavController.navigate("auth") {
+                        popUpTo("main") { inclusive = true }
+                    }
+                }
+            )
+        }
+    }
+}
 
