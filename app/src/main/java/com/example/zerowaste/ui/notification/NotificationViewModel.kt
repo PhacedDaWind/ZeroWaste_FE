@@ -1,7 +1,10 @@
 package com.example.zerowaste.ui.notification
 
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.zerowaste.data.local.SessionManager
 import com.example.zerowaste.data.remote.NotificationResponse
 import com.example.zerowaste.data.remote.RetrofitClient
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,9 +21,10 @@ data class NotificationUiState(
     val filter: NotificationFilter = NotificationFilter.ALL
 )
 
-class NotificationViewModel : ViewModel() {
+class NotificationViewModel(application: Application) : AndroidViewModel(application) {
+    private val sessionManager = SessionManager(application)
 
-    private val apiService = RetrofitClient.notifApiService
+    private val apiService = RetrofitClient.getNotificationApi(application)
 
     private val _uiState = MutableStateFlow(NotificationUiState())
     val uiState = _uiState.asStateFlow()
