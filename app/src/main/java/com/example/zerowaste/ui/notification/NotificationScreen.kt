@@ -24,20 +24,21 @@ import com.example.zerowaste.data.remote.NotificationResponse
 
 @Composable
 fun NotificationScreen(
-    userId: Long,
-    viewModel: NotificationViewModel = viewModel()
+    viewModel: NotificationViewModel = viewModel() // 1. REMOVED the userId parameter
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    LaunchedEffect(userId) {
-        viewModel.fetchNotifications(userId)
+    // 2. This LaunchedEffect now triggers the initial data load
+    LaunchedEffect(Unit) {
+        viewModel.fetchNotifications()
     }
 
     Scaffold(
         bottomBar = {
             BottomActionBar(
-                onMostRecent = { viewModel.fetchNotifications(userId, unreadOnly = false) },
-                onRemoveUnread = { viewModel.fetchNotifications(userId, unreadOnly = true) }
+                // 3. Updated to call the ViewModel without passing userId
+                onMostRecent = { viewModel.fetchNotifications(unreadOnly = false) },
+                onRemoveUnread = { viewModel.fetchNotifications(unreadOnly = true) }
             )
         },
         containerColor = Color(0xFFF5F5F5)
@@ -76,6 +77,7 @@ fun NotificationScreen(
         }
     }
 }
+
 
 @Composable
 fun NotificationCard(notification: NotificationResponse, onMarkRead: () -> Unit) {

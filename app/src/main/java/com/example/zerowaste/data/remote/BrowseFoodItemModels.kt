@@ -1,38 +1,75 @@
 package com.example.zerowaste.data.remote
 
-import com.example.zerowaste.enums.FoodItemActionType
+import com.google.gson.annotations.SerializedName
 
+data class PageWrapper<T>(
+    @SerializedName("content")
+    val content: List<T>,
 
-/**
- * Mirrors `BrowseFoodItemResDTO.java` from your backend.
- */
-data class BrowseFoodItemResDTO(
+    @SerializedName("pageNumber")
+    val pageNumber: Int,
+
+    @SerializedName("pageSize")
+    val pageSize: Int,
+
+    @SerializedName("totalElements")
+    val totalElements: Long,
+
+    @SerializedName("totalPages")
+    val totalPages: Int,
+
+    @SerializedName("last")
+    val last: Boolean,
+
+    @SerializedName("first")
+    val first: Boolean,
+
+    @SerializedName("hasNext")
+    val hasNext: Boolean,
+
+    @SerializedName("hasPrevious")
+    val hasPrevious: Boolean,
+
+    @SerializedName("hasContent")
+    val hasContent: Boolean
+)
+
+// This matches the BrowseFoodItemResDTO from your backend.
+data class BrowseFoodItemResponse(
     val id: Long,
     val usersId: Long,
     val convertToDonation: Boolean,
-    val category: String,
-    val expiryDate: String,
-    val storageLocation: String,
+    val category: String?,
+    val expiryDate: String?, // Dates are often strings in JSON
+    val storageLocation: String?,
     val username: String,
     val itemName: String,
     val quantity: Long,
     val pickupLocation: String?,
     val contactMethod: String?,
-    val actionType: FoodItemActionType?,
-    val actionTypeLabel: String?
+    val actionType: String,
+    val actionTypeLabel: String
 )
 
-/**
- * Mirrors `BrowseFoodItemReqDTO.java` for sending filter and pagination info.
- */
-data class BrowseFoodItemReqDTO(
-    val usersId: Long? = null,
-    val convertToDonation: Boolean? = null,
-    val category: String? = null,
-    val expiryDate: String? = null,
-    val storageLocation: String? = null,
-    val actionType: FoodItemActionType? = null,
-    val page: Int = 0,
-    val size: Int = 20,
-    val sort: List<String>? = null
+// This matches the FoodItemResDTO from your backend.
+data class FoodItemDetailResponse(
+    val id: Long,
+    val name: String,
+    val quantity: Long,
+    val expiryDate: String?,
+    val category: String?,
+    val storageLocation: String?,
+    val remarks: String?,
+    val contactMethod: String?,
+    val pickupLocation: String?,
+    val actionType: String, // Enums are usually strings in JSON
+    val user: UserInfo, // A nested object for user details
+    val convertToDonation: Boolean,
+    val reservedQuantity: Long
+)
+
+// A simple data class for the nested user object in the response.
+data class UserInfo(
+    val id: Long,
+    val username: String
 )
