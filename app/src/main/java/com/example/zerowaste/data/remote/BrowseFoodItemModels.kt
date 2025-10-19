@@ -62,7 +62,7 @@ data class FoodItemDetailResponse(
     val remarks: String?,
     val contactMethod: String?,
     val pickupLocation: String?,
-    val actionType: String, // Enums are usually strings in JSON
+    val actionType: String?, // Enums are usually strings in JSON
     val user: UserInfo, // A nested object for user details
     val convertToDonation: Boolean,
     val reservedQuantity: Long

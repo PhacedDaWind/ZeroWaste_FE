@@ -14,13 +14,14 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.*
 
-// 1. The expiryDate is now a String? to hold the formatted date "YYYY-MM-DD"
+// 1. Added 'name' to the filters
 data class BrowseFilters(
     val isInventoryOnly: Boolean = false,
     val isDonationsOnly: Boolean = false,
+    val name: String? = null,
     val category: String? = null,
     val storageLocation: String? = null,
-    val expiryDate: String? = null, // Changed from LocalDate? to String?
+    val expiryDate: String? = null,
     val sort: List<String> = listOf("expiryDate")
 )
 
@@ -45,6 +46,12 @@ class BrowseFoodItemViewModel(application: Application) : AndroidViewModel(appli
     val filters: StateFlow<BrowseFilters> = _filters
 
 
+    // 2. --- ADDED --- New function for name search
+    fun onNameSearch(query: String) {
+        _filters.value = _filters.value.copy(name = query.ifBlank { null })
+        loadItems(isFirstLoad = true)
+    }
+
     // --- NEW FUNCTIONS FOR CATEGORY AND STORAGE ---
     fun onCategorySearch(query: String) {
         _filters.value = _filters.value.copy(category = query.ifBlank { null })
@@ -55,9 +62,8 @@ class BrowseFoodItemViewModel(application: Application) : AndroidViewModel(appli
         _filters.value = _filters.value.copy(storageLocation = query.ifBlank { null })
         loadItems(isFirstLoad = true)
     }
-    // 2. This function now accepts the raw Long timestamp
+
     fun onExpiryDateSelected(dateMillis: Long?) {
-        // Format the date here in the ViewModel
         val formattedDate = dateMillis?.let { formatMillisToDateString(it) }
         _filters.value = _filters.value.copy(expiryDate = formattedDate)
         loadItems(isFirstLoad = true)
@@ -93,9 +99,10 @@ class BrowseFoodItemViewModel(application: Application) : AndroidViewModel(appli
                     pageSize = 10,
                     usersId = if (currentFilters.isInventoryOnly) userId else null,
                     convertToDonation = if (currentFilters.isDonationsOnly) true else null,
+                    name = currentFilters.name,
                     category = currentFilters.category,
                     storageLocation = currentFilters.storageLocation,
-                    expiryDate = currentFilters.expiryDate, // Pass the formatted string
+                    expiryDate = currentFilters.expiryDate,
                     sort = currentFilters.sort
                 ).data
                 _uiState.value = _uiState.value.copy(
@@ -105,20 +112,35 @@ class BrowseFoodItemViewModel(application: Application) : AndroidViewModel(appli
                     isLoading = false,
                     isLoadingMore = false
                 )
+            } catch (e: HttpException) {
+                // --- MODIFIED: Added specific error handling ---
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    isLoadingMore = false,
+                    error = "An unexpected error occurred: ${e.code()}"
+                )
+            } catch (e: IOException) {
+                // --- MODIFIED: Added specific error handling ---
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    isLoadingMore = false,
+                    error = "Couldn't reach server. Check your internet connection."
+                )
             } catch (e: Exception) {
-                // ... (error handling remains the same)
+                // --- MODIFIED: Added specific error handling ---
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    isLoadingMore = false,
+                    error = "An unknown error occurred."
+                )
             }
         }
     }
 
-    // 3. NEW private helper function to do the safe date conversion
     private fun formatMillisToDateString(millis: Long): String {
         val date = Date(millis)
-        // SimpleDateFormat works on all API levels
         val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        // Adjust for timezone to prevent off-by-one day errors
         formatter.timeZone = TimeZone.getTimeZone("UTC")
         return formatter.format(date)
     }
 }
-

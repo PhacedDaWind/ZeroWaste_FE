@@ -14,7 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
@@ -50,17 +50,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.example.zerowaste.data.remote.BrowseFoodItemResponse
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BrowseFoodItemScreen(
     viewModel: BrowseFoodItemViewModel,
-    appNavController: NavController // <-- 1. ADDED: Receive the main navigator
+    appNavController: NavController
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val filters by viewModel.filters.collectAsState()
     val listState = rememberLazyListState()
 
+    // Load initial items
     LaunchedEffect(Unit) {
         viewModel.loadItems(isFirstLoad = true)
     }
@@ -73,6 +75,7 @@ fun BrowseFoodItemScreen(
                 onDonationsToggled = { viewModel.onDonationsOnlyToggled(it) },
                 onDateSelected = { viewModel.onExpiryDateSelected(it) },
                 onSortChanged = { viewModel.onSortChanged(it) },
+                onNameSearch = { viewModel.onNameSearch(it) },
                 onCategorySearch = { viewModel.onCategorySearch(it) },
                 onStorageSearch = { viewModel.onStorageLocationSearch(it) }
             )
@@ -89,20 +92,31 @@ fun BrowseFoodItemScreen(
                 Text(
                     text = uiState.error!!,
                     color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.align(Alignment.Center)
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .padding(16.dp)
                 )
+            } else if (uiState.items.isEmpty()) {
+                // --- ADDED: Empty state message ---
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        "No items found. Try adjusting your filters.",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                }
             } else {
                 LazyColumn(
                     state = listState,
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    items(uiState.items) { item ->
-                        // 2. UPDATED: Pass the onClick lambda to the card
+                    items(uiState.items, key = { it.id }) { item ->
                         FoodItemCard(
                             item = item,
                             onClick = {
-                                // 3. Navigate to the detail screen with the item's ID
                                 appNavController.navigate("food_detail/${item.id}")
                             }
                         )
@@ -122,6 +136,7 @@ fun BrowseFoodItemScreen(
                     }
                 }
 
+                // Infinite scroll listener
                 LaunchedEffect(listState) {
                     snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
                         .collect { lastVisibleItemIndex ->
@@ -143,21 +158,42 @@ fun FilterBar(
     onDonationsToggled: (Boolean) -> Unit,
     onDateSelected: (Long?) -> Unit,
     onSortChanged: (String) -> Unit,
-    // Add new parameters for the search functions
+    onNameSearch: (String) -> Unit,
     onCategorySearch: (String) -> Unit,
     onStorageSearch: (String) -> Unit
 ) {
     var showDatePicker by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
+
     // State for the text fields
+    var nameQuery by remember { mutableStateOf(filters.name ?: "") }
     var categoryQuery by remember { mutableStateOf(filters.category ?: "") }
     var storageQuery by remember { mutableStateOf(filters.storageLocation ?: "") }
+
+    // --- MODIFIED: Debouncing logic for automatic search ---
+    LaunchedEffect(nameQuery) {
+        delay(500L) // Wait for 500ms after user stops typing
+        if (nameQuery != filters.name) {
+            onNameSearch(nameQuery)
+        }
+    }
+    LaunchedEffect(categoryQuery) {
+        delay(500L)
+        if (categoryQuery != filters.category) {
+            onCategorySearch(categoryQuery)
+        }
+    }
+    LaunchedEffect(storageQuery) {
+        delay(500L)
+        if (storageQuery != filters.storageLocation) {
+            onStorageSearch(storageQuery)
+        }
+    }
 
     Column {
         TopAppBar(
             title = { Text("Browse Items") },
             actions = {
-                // --- Sort Menu ---
                 IconButton(onClick = { showSortMenu = true }) {
                     Icon(Icons.Default.Sort, contentDescription = "Sort Options")
                     DropdownMenu(
@@ -182,7 +218,6 @@ fun FilterBar(
                 }
             }
         )
-        // --- Filter Chips ---
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -207,11 +242,34 @@ fun FilterBar(
             )
         }
 
-        // --- NEW: Search Fields for Category and Storage ---
+        // --- MODIFIED: Search field for Name with automatic search ---
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = nameQuery,
+                onValueChange = { nameQuery = it },
+                label = { Text("Search by Name") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                trailingIcon = {
+                    if (nameQuery.isNotEmpty()) {
+                        IconButton(onClick = { nameQuery = "" }) {
+                            Icon(Icons.Default.Clear, contentDescription = "Clear search")
+                        }
+                    }
+                }
+            )
+        }
+
+        // --- MODIFIED: Search fields with automatic search ---
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -220,9 +278,12 @@ fun FilterBar(
                 onValueChange = { categoryQuery = it },
                 label = { Text("Category") },
                 modifier = Modifier.weight(1f),
+                singleLine = true,
                 trailingIcon = {
-                    IconButton(onClick = { onCategorySearch(categoryQuery) }) {
-                        Icon(Icons.Default.Search, contentDescription = "Search Category")
+                    if (categoryQuery.isNotEmpty()) {
+                        IconButton(onClick = { categoryQuery = "" }) {
+                            Icon(Icons.Default.Clear, contentDescription = "Clear category")
+                        }
                     }
                 }
             )
@@ -231,16 +292,19 @@ fun FilterBar(
                 onValueChange = { storageQuery = it },
                 label = { Text("Storage") },
                 modifier = Modifier.weight(1f),
+                singleLine = true,
                 trailingIcon = {
-                    IconButton(onClick = { onStorageSearch(storageQuery) }) {
-                        Icon(Icons.Default.Search, contentDescription = "Search Storage")
+                    if (storageQuery.isNotEmpty()) {
+                        IconButton(onClick = { storageQuery = "" }) {
+                            Icon(Icons.Default.Clear, contentDescription = "Clear storage")
+                        }
                     }
                 }
             )
         }
     }
 
-    // --- Date Picker Dialog ---
+    // --- MODIFIED: Date Picker Dialog with a Clear button ---
     if (showDatePicker) {
         val datePickerState = rememberDatePickerState()
         DatePickerDialog(
@@ -254,7 +318,15 @@ fun FilterBar(
                 ) { Text("OK") }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+                Row {
+                    TextButton(
+                        onClick = {
+                            onDateSelected(null) // Clear the date
+                            showDatePicker = false
+                        }
+                    ) { Text("Clear") }
+                    TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+                }
             }
         ) {
             DatePicker(state = datePickerState)
@@ -270,7 +342,7 @@ fun FoodItemCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick), // 5. Make the card clickable
+            .clickable(onClick = onClick),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -298,3 +370,4 @@ fun FoodItemCard(
         }
     }
 }
+
