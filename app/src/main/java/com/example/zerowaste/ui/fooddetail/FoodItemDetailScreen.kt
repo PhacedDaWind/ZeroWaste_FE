@@ -147,7 +147,7 @@ fun DetailRow(label: String, value: String) {
 // --- UPDATED: This composable now handles displaying labels ---
 @Composable
 fun ActionTypeSelector(
-    currentActionType: String,
+    currentActionType: String?,
     isUpdating: Boolean,
     onActionSelected: (String) -> Unit
 ) {
@@ -171,7 +171,7 @@ fun ActionTypeSelector(
             Box {
                 OutlinedButton(onClick = { expanded = true }) {
                     // 2. Display the label for the current action type
-                    Text(actionTypeLabels[currentActionType] ?: currentActionType)
+                    (actionTypeLabels[currentActionType] ?: currentActionType)?.let { Text(it) }
                 }
                 DropdownMenu(
                     expanded = expanded,
