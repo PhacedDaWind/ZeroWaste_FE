@@ -6,10 +6,6 @@ import java.util.Date
 /**
  * Generic response wrapper (matches backend ResponseDTO)
  */
-data class ResponseDTO<T>(
-    @SerializedName("data")
-    val data: T
-)
 
 /**
  * Notification model matching backend NotificationResDTO
