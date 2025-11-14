@@ -1,12 +1,104 @@
 package com.example.zerowaste.data.remote
 
-// This must match the JSON body your API expects
+import com.google.gson.annotations.SerializedName
+
+// --- Login Request (No changes needed) ---
 data class LoginRequest(
     val username: String,
     val password: String
 )
 
-// This must match the JSON response your API sends
+// --- Unified Login/2FA Response (UPDATED) ---
+// This now exactly matches your backend's LoginResponse DTO.
 data class LoginResponse(
-    val token: String
+    val status: String,
+    val message: String,
+    val token: String?, // This will be null when 2FA is required
+    val userId: Long? // <-- ADD THIS FIELD to capture the user's ID
+)
+
+// --- 2FA Verification Request (UPDATED) ---
+// This now sends the username and code, as required by your new API.
+data class Verify2faRequest(
+    val username: String,
+    val code: String
+)
+
+// --- Generic and Registration DTOs (No changes needed) ---
+
+// Generic wrapper for responses like registration
+data class ApiResponse<T>(
+    val data: T,
+    val status: Int,
+    val errorCode: String?
+)
+
+// For parsing custom API errors
+data class ApiErrorResponse(
+    val status: Int,
+    @SerializedName("errorCode")
+    val errorCode: String,
+    val data: Any? = null
+)
+
+// Registration DTOs
+data class RegistrationRequest(
+    val username: String,
+    val password: String,
+    val email: String,
+    val householdSize: Long?,
+    val twoFactorAuthEnabled: Boolean?,
+    val status: String
+)
+
+data class RegistrationResponse(
+    val username: String,
+    val email: String,
+    val householdSize: Long?,
+    val twoFactorAuthEnabled: Boolean?,
+    val status: String
+)
+
+data class UserDetailsResponse(
+    @SerializedName("id")
+    val id: Long,
+
+    @SerializedName("username")
+    val username: String,
+
+    @SerializedName("email")
+    val email: String,
+
+    @SerializedName("householdSize")
+    val householdSize: Long?,
+
+    @SerializedName("twoFactorAuthEnabled")
+    val twoFactorAuthEnabled: Boolean,
+
+    @SerializedName("status")
+    val status: String,
+
+    @SerializedName("totalItems")
+    val totalItems: Long,
+
+    @SerializedName("donationsMade")
+    val donationsMade: Long
+)
+
+data class ExpiringItem(val name: String, val quantity: String, val expiryDate: String)
+
+data class Verify2faSetupRequest(
+    val verificationCode: String
+)
+
+// For the first step: requesting a reset code
+data class PasswordResetRequest(
+    val email: String
+)
+
+// For the second step: executing the reset with the code and new password
+data class PasswordResetExecute(
+    val email: String,
+    val code: String,
+    val newPassword: String
 )
