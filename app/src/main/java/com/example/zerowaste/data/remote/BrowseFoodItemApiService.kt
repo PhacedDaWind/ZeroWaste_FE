@@ -1,5 +1,4 @@
 package com.example.zerowaste.data.remote
-import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.PUT
 import retrofit2.http.Path
@@ -16,11 +15,11 @@ interface BrowseFoodItemApiService {
         // Pagination parameters from BaseViewOption
         @Query("page") page: Int,
         @Query("pageSize") pageSize: Int,
-        @Query("searchQuery") searchQuery: String? = null,
 
         // Filter parameters from BrowseFoodItemReqDTO
         @Query("usersId") usersId: Long? = null,
         @Query("convertToDonation") convertToDonation: Boolean? = null,
+        @Query("itemName") name: String? = null, // <-- FIXED: Changed query parameter to "itemName" to match backend
         @Query("category") category: String? = null,
         @Query("expiryDate") expiryDate: String? = null, // Dates are sent as strings
         @Query("storageLocation") storageLocation: String? = null,
@@ -40,6 +39,8 @@ interface BrowseFoodItemApiService {
     @PUT("api/browse-food/update/{id}")
     suspend fun updateFoodItemActionType(
         @Path("id") itemId: Long,
-        @Query("foodItemActionType") actionType: String
+        @Query("convertToDonation")convertToDonation:Boolean,
+        @Query("foodItemActionType") actionType: String?
     ): ApiResponse<Any> // Assuming we only care about the success/failure
 }
+

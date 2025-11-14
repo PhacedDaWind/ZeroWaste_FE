@@ -34,4 +34,9 @@ interface NotificationApiService {
     suspend fun deleteAllNotifications(
         @Path("userId") userId: Long
     ): Response<ResponseDTO<String>>
+
+    @POST("api/notification/create")
+    suspend fun createNotification(
+        @Body request: NotificationReqDTO
+    ): Response<ResponseDTO<NotificationResponse>>
 }
