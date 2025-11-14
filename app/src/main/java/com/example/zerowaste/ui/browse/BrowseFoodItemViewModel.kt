@@ -5,9 +5,13 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.zerowaste.data.local.SessionManager
 import com.example.zerowaste.data.remote.BrowseFoodItemResponse
+import com.example.zerowaste.data.remote.NotificationApiService
+import com.example.zerowaste.data.remote.NotificationReqDTO
+import com.example.zerowaste.data.remote.NotificationType
 import com.example.zerowaste.data.remote.RetrofitClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
 import java.io.IOException
@@ -39,20 +43,52 @@ class BrowseFoodItemViewModel(application: Application) : AndroidViewModel(appli
     private val apiService = RetrofitClient.getBrowseFoodApi(application)
     private val sessionManager = SessionManager(application)
 
+    private val notificationApiService: NotificationApiService = RetrofitClient.getNotificationApi(application)
     private val _uiState = MutableStateFlow(BrowseFoodUiState())
     val uiState: StateFlow<BrowseFoodUiState> = _uiState
 
     private val _filters = MutableStateFlow(BrowseFilters())
     val filters: StateFlow<BrowseFilters> = _filters
 
+    fun claimDonation(item: BrowseFoodItemResponse) {
+        viewModelScope.launch {
+            try {
+                // Step A: Get data for notification
+                val userId = sessionManager.getUserId() ?: 1L
 
-    // 2. --- ADDED --- New function for name search
+                // Step B: Create the DONATION_CLAIMED notification
+                val notificationDTO = createDonationClaimedDTO(item, userId)
+                val notificationResponse = notificationApiService.createNotification(notificationDTO)
+                if (!notificationResponse.isSuccessful) throw IOException("Failed to create notification")
+
+                // Step C: Refresh the list to remove the claimed item
+                loadItems(isFirstLoad = true)
+
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = e.message) }
+            }
+        }
+    }
+
+    // --- HELPER FUNCTION: Create Notification DTO for Claiming ---
+    private fun createDonationClaimedDTO(item: BrowseFoodItemResponse, userId: Long): NotificationReqDTO {
+        return NotificationReqDTO(
+            notifType = NotificationType.DONATION_CLAIMED,
+            usersId = userId,
+            itemName = listOf(item.itemName),
+            quantity = listOf(item.quantity.toLong()),
+            expiryDate = null,
+            meal = null
+        )
+    }
+
+
+    // --- FILTER HANDLERS ---
     fun onNameSearch(query: String) {
         _filters.value = _filters.value.copy(name = query.ifBlank { null })
         loadItems(isFirstLoad = true)
     }
 
-    // --- NEW FUNCTIONS FOR CATEGORY AND STORAGE ---
     fun onCategorySearch(query: String) {
         _filters.value = _filters.value.copy(category = query.ifBlank { null })
         loadItems(isFirstLoad = true)
@@ -69,7 +105,6 @@ class BrowseFoodItemViewModel(application: Application) : AndroidViewModel(appli
         loadItems(isFirstLoad = true)
     }
 
-    // --- Other filter functions remain the same ---
     fun onInventoryOnlyToggled(isSelected: Boolean) {
         _filters.value = _filters.value.copy(isInventoryOnly = isSelected, isDonationsOnly = false)
         loadItems(isFirstLoad = true)
@@ -87,6 +122,9 @@ class BrowseFoodItemViewModel(application: Application) : AndroidViewModel(appli
         loadItems()
     }
 
+    /**
+     * Loads food items, applying filtering logic to control visibility based on ownership and donation status.
+     */
     fun loadItems(isFirstLoad: Boolean = false) {
         viewModelScope.launch {
             val pageToLoad = if (isFirstLoad) 1 else _uiState.value.currentPage + 1
@@ -94,17 +132,39 @@ class BrowseFoodItemViewModel(application: Application) : AndroidViewModel(appli
             try {
                 val currentFilters = _filters.value
                 val userId = sessionManager.getUserId()
+
+                // ⭐ START OF FINALIZED FILTERING LOGIC ⭐
+                val requestUserId: Long?
+                val requestConvertToDonation: Boolean?
+
+                if (currentFilters.isDonationsOnly) {
+                    // Scenario 1: Donations Only
+                    requestUserId = null // DO NOT filter by user ID (show all)
+                    requestConvertToDonation = true // Filter strictly by donation flag
+                } else if (currentFilters.isInventoryOnly) {
+                    // Scenario 2: Inventory Only
+                    requestUserId = userId // Filter by current user ID
+                    requestConvertToDonation = false // Filter out items flagged as donation
+                } else {
+                    // Scenario 3 (Default/No filters active): Show MY Inventory AND All Donations
+                    requestUserId = userId
+                    requestConvertToDonation = null
+                }
+
+                // ⭐ END OF FINALIZED FILTERING LOGIC ⭐
+
                 val response = apiService.getBrowseList(
                     page = pageToLoad,
                     pageSize = 10,
-                    usersId = if (currentFilters.isInventoryOnly) userId else null,
-                    convertToDonation = if (currentFilters.isDonationsOnly) true else null,
+                    usersId = requestUserId,
+                    convertToDonation = requestConvertToDonation,
                     name = currentFilters.name,
                     category = currentFilters.category,
                     storageLocation = currentFilters.storageLocation,
                     expiryDate = currentFilters.expiryDate,
                     sort = currentFilters.sort
                 ).data
+
                 _uiState.value = _uiState.value.copy(
                     items = if (isFirstLoad) response.content else _uiState.value.items + response.content,
                     currentPage = pageToLoad,
@@ -113,21 +173,18 @@ class BrowseFoodItemViewModel(application: Application) : AndroidViewModel(appli
                     isLoadingMore = false
                 )
             } catch (e: HttpException) {
-                // --- MODIFIED: Added specific error handling ---
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isLoadingMore = false,
                     error = "An unexpected error occurred: ${e.code()}"
                 )
             } catch (e: IOException) {
-                // --- MODIFIED: Added specific error handling ---
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isLoadingMore = false,
                     error = "Couldn't reach server. Check your internet connection."
                 )
             } catch (e: Exception) {
-                // --- MODIFIED: Added specific error handling ---
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isLoadingMore = false,

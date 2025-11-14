@@ -39,7 +39,8 @@ interface BrowseFoodItemApiService {
     @PUT("api/browse-food/update/{id}")
     suspend fun updateFoodItemActionType(
         @Path("id") itemId: Long,
-        @Query("foodItemActionType") actionType: String
+        @Query("convertToDonation")convertToDonation:Boolean,
+        @Query("foodItemActionType") actionType: String?
     ): ApiResponse<Any> // Assuming we only care about the success/failure
 }
 

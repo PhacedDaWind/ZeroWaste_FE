@@ -4,21 +4,26 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.zerowaste.data.remote.ApiErrorResponse
+import com.example.zerowaste.data.local.SessionManager
 import com.example.zerowaste.data.remote.FoodItemDetailResponse
+import com.example.zerowaste.data.remote.NotificationApiService
+import com.example.zerowaste.data.remote.NotificationReqDTO
+import com.example.zerowaste.data.remote.NotificationType
 import com.example.zerowaste.data.remote.RetrofitClient
-import com.google.gson.Gson
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
 import java.io.IOException
+import java.util.*
 
-// This data class will hold all the state for the Food Item Detail screen
+// --- Assume FoodItemDetailResponse and FoodItemApiService are defined in your data package ---
+
 data class FoodItemDetailUiState(
     val item: FoodItemDetailResponse? = null,
     val isLoading: Boolean = true,
-    val isUpdating: Boolean = false, // For showing a spinner during update
+    val isUpdating: Boolean = false,
     val error: String? = null,
     val updateSuccess: Boolean = false
 )
@@ -26,11 +31,11 @@ data class FoodItemDetailUiState(
 class FoodItemDetailViewModel(application: Application) : AndroidViewModel(application) {
 
     private val apiService = RetrofitClient.getBrowseFoodApi(application)
-
+    private val notificationApiService: NotificationApiService = RetrofitClient.getNotificationApi(application)
+    private val sessionManager = SessionManager(application)
     private val _uiState = MutableStateFlow(FoodItemDetailUiState())
     val uiState: StateFlow<FoodItemDetailUiState> = _uiState
 
-    // Called by the UI to start loading the data
     fun loadItemDetails(itemId: Long) {
         viewModelScope.launch {
             _uiState.value = FoodItemDetailUiState(isLoading = true)
@@ -49,38 +54,80 @@ class FoodItemDetailViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
-    // Called by the UI when the user selects a new action type
-    fun updateActionType(itemId: Long, newActionType: String) {
+    fun updateActionType(itemId: Long, newActionType: String?) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isUpdating = true, error = null)
+            _uiState.update { it.copy(isUpdating = true, error = null) }
             try {
-                apiService.updateFoodItemActionType(itemId, newActionType)
+                // 1. Call your existing apiService function to update the item
+                val convertToDonationFlag = (newActionType == null)
 
-                // On success, update the local state to reflect the change immediately
-                _uiState.value = _uiState.value.copy(
-                    isUpdating = false,
-                    updateSuccess = true,
-                    item = _uiState.value.item?.copy(actionType = newActionType)
+                apiService.updateFoodItemActionType(
+                    itemId = itemId,
+                    convertToDonation = convertToDonationFlag,
+                    actionType = newActionType
                 )
+
+                // 2. Trigger Notification if an action was selected
+                val userId = sessionManager.getUserId() ?: 1L
+                val item = _uiState.value.item
+                if (item == null) throw IllegalStateException("No item details loaded")
+
+                if (newActionType != null) {
+                    postNotification(item, userId)
+                }
+
+                // 3. Update local UI state on success
+                _uiState.update {
+                    it.copy(
+                        isUpdating = false,
+                        updateSuccess = true,
+                        item = _uiState.value.item?.copy(actionType = newActionType)
+                    )
+                }
             } catch (e: Exception) {
-                // --- THIS BLOCK IS NOW MORE DETAILED ---
-                Log.e("FoodItemDetailVM", "Error updating action type", e) // Log the full error
+                Log.e("FoodItemDetailVM", "Error updating action type", e)
                 val errorMessage = when (e) {
                     is HttpException -> "Update failed: HTTP ${e.code()}. Check backend logs."
                     is IOException -> "Network error. Please check your connection."
                     else -> "An unexpected error occurred during update."
                 }
-                _uiState.value = _uiState.value.copy(
-                    isUpdating = false,
-                    error = errorMessage
-                )
+                _uiState.update { it.copy(isUpdating = false, error = errorMessage) }
             }
         }
     }
 
-    // Called by the UI after the success message has been shown
+    // --- Core logic: Enforce DONATION_CLAIMED type for ANY action ---
+    private suspend fun postNotification(item: FoodItemDetailResponse, userId: Long) {
+        val notificationDTO = createDonationClaimedDTO(item, userId)
+
+        try {
+            // POST the notification to the API
+            val notificationResponse = notificationApiService.createNotification(notificationDTO)
+            if (!notificationResponse.isSuccessful) {
+                Log.e("FoodItemDetailVM", "Failed to create notification: ${notificationResponse.code()}")
+            }
+        } catch (e: Exception) {
+            Log.e("FoodItemDetailVM", "Network error during notification POST: ${e.message}")
+        }
+    }
+
+    // Helper function to build the DTO (Passes data, enforces type)
+    private fun createDonationClaimedDTO(item: FoodItemDetailResponse, userId: Long): NotificationReqDTO {
+        return NotificationReqDTO(
+            notifType = NotificationType.DONATION_CLAIMED,
+            usersId = userId,
+            itemName = listOf(item.name),
+            quantity = listOf(item.quantity.toLong()),
+            expiryDate = null,
+            meal = null
+        )
+    }
+
     fun resetUpdateSuccessFlag() {
-        _uiState.value = _uiState.value.copy(updateSuccess = false)
+        _uiState.update { it.copy(updateSuccess = false) }
+    }
+
+    fun resetState() {
+        _uiState.update { FoodItemDetailUiState() }
     }
 }
-

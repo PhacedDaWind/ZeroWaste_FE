@@ -26,12 +26,12 @@ fun FoodItemDetailScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
 
-    // This effect triggers the data loading when the screen is first displayed
+    // 1. Load data when the screen appears
     LaunchedEffect(itemId) {
         viewModel.loadItemDetails(itemId)
     }
 
-    // This effect shows a toast message on successful update and then resets the flag
+    // 2. Show a "Success" toast
     LaunchedEffect(uiState.updateSuccess) {
         if (uiState.updateSuccess) {
             Toast.makeText(context, "Action type updated successfully!", Toast.LENGTH_SHORT).show()
@@ -39,11 +39,19 @@ fun FoodItemDetailScreen(
         }
     }
 
-    // --- NEW: This effect shows a toast for any errors ---
+    // 3. Show an error toast
     LaunchedEffect(uiState.error) {
         uiState.error?.let { errorMessage ->
             Toast.makeText(context, errorMessage, Toast.LENGTH_LONG).show()
-            // Optional: You can add a function to the ViewModel to clear the error after showing it.
+            // You can add viewModel.clearError() here if you implement it
+        }
+    }
+
+    // 4. --- THIS IS THE FIX for the "stuck action" bug ---
+    // Resets the ViewModel's state when leaving the screen
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.resetState()
         }
     }
 
@@ -73,14 +81,15 @@ fun FoodItemDetailScreen(
                         item = uiState.item!!,
                         isUpdating = uiState.isUpdating,
                         onActionTypeChange = { newActionType ->
+                            // This calls the ViewModel function you provided
                             viewModel.updateActionType(itemId, newActionType)
                         }
                     )
                 }
-                // Show a generic error message if loading fails
                 else -> {
+                    // Show error or empty state
                     Text(
-                        text = "Failed to load item details.",
+                        text = uiState.error ?: "Failed to load item details.",
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.align(Alignment.Center)
                     )
@@ -94,7 +103,7 @@ fun FoodItemDetailScreen(
 fun ItemDetailContent(
     item: FoodItemDetailResponse,
     isUpdating: Boolean,
-    onActionTypeChange: (String) -> Unit
+    onActionTypeChange: (String?) -> Unit // Accepts nullable String
 ) {
     val scrollState = rememberScrollState()
 
@@ -110,7 +119,7 @@ fun ItemDetailContent(
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
         )
-        Divider()
+        HorizontalDivider()
         DetailRow(label = "Category", value = item.category ?: "N/A")
         DetailRow(label = "Quantity", value = item.quantity.toString())
         DetailRow(label = "Expiry Date", value = item.expiryDate ?: "N/A")
@@ -118,9 +127,9 @@ fun ItemDetailContent(
         DetailRow(label = "Pickup Location", value = item.pickupLocation ?: "N/A")
         DetailRow(label = "Contact Method", value = item.contactMethod ?: "N/A")
         DetailRow(label = "Remarks", value = item.remarks ?: "None")
-        Divider()
+        HorizontalDivider()
 
-        // Action Type Selector (Now updated)
+        // Action Type Selector
         ActionTypeSelector(
             currentActionType = item.actionType,
             isUpdating = isUpdating,
@@ -144,16 +153,24 @@ fun DetailRow(label: String, value: String) {
     }
 }
 
-// --- UPDATED: This composable now handles displaying labels ---
 @Composable
 fun ActionTypeSelector(
     currentActionType: String?,
     isUpdating: Boolean,
-    onActionSelected: (String) -> Unit
+    onActionSelected: (String?) -> Unit // Accepts nullable String
 ) {
     var expanded by remember { mutableStateOf(false) }
-    // 1. Map of enum values to user-friendly labels
-    val actionTypeLabels = mapOf(
+
+    // Fixes the "menu stuck open" bug
+    DisposableEffect(Unit) {
+        onDispose {
+            expanded = false
+        }
+    }
+
+    // List of options, including 'null'
+    val actionTypeOptions = listOf(
+        null to "...", // Your null option
         "MARK_AS_USED" to "Mark as used",
         "PLAN_FOR_MEAL" to "Plan for meal",
         "FLAG_FOR_DONATION" to "Flag for donation"
@@ -168,21 +185,24 @@ fun ActionTypeSelector(
         if (isUpdating) {
             CircularProgressIndicator(modifier = Modifier.size(24.dp))
         } else {
+            // --- FIX: Box wrapper fixes visual clipping bug ---
             Box {
                 OutlinedButton(onClick = { expanded = true }) {
-                    // 2. Display the label for the current action type
-                    (actionTypeLabels[currentActionType] ?: currentActionType)?.let { Text(it) }
+                    // Find the label for the current action type
+                    val label = actionTypeOptions.find { it.first == currentActionType }?.second ?: "..."
+                    Text(label)
                 }
+
+                // The DropdownMenu is INSIDE the Box
                 DropdownMenu(
                     expanded = expanded,
                     onDismissRequest = { expanded = false }
                 ) {
-                    // 3. Iterate over the map to create menu items
-                    actionTypeLabels.forEach { (enumValue, label) ->
+                    actionTypeOptions.forEach { (actionValue, label) ->
                         DropdownMenuItem(
                             text = { Text(label) },
                             onClick = {
-                                onActionSelected(enumValue) // Send the raw enum value to the API
+                                onActionSelected(actionValue) // Sends null or the string
                                 expanded = false
                             }
                         )
@@ -192,4 +212,3 @@ fun ActionTypeSelector(
         }
     }
 }
-
