@@ -5,86 +5,98 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.zerowaste.data.local.SessionManager
 import com.example.zerowaste.data.remote.NotificationResponse
+import com.example.zerowaste.data.remote.NotificationType
+import com.example.zerowaste.data.remote.NotificationApiService
 import com.example.zerowaste.data.remote.RetrofitClient
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.io.IOException
 
-enum class NotificationFilter { ALL, UNREAD }
-
+// This data class holds the entire state for the notification screen
 data class NotificationUiState(
     val notifications: List<NotificationResponse> = emptyList(),
     val isLoading: Boolean = false,
-    val error: String? = null,
-    val filter: NotificationFilter = NotificationFilter.ALL
+    val errorMessage: String? = null,
+    val filterType: NotificationType? = null // null means "All"
 )
 
+// Inherit from AndroidViewModel to get the Application context
 class NotificationViewModel(application: Application) : AndroidViewModel(application) {
+
+    // Get the API service by passing the context to your RetrofitClient
+    private val apiService: NotificationApiService = RetrofitClient.getNotificationApi(application)
+
+    // ⭐ GET USER ID DYNAMICALLY FROM SESSION MANAGER
     private val sessionManager = SessionManager(application)
-    private val apiService = RetrofitClient.getNotificationApi(application)
+    private val currentUserId: Long = sessionManager.getUserId() ?: 1L // Use 1L as a safe fallback
 
     private val _uiState = MutableStateFlow(NotificationUiState())
-    val uiState = _uiState.asStateFlow()
+    val uiState: StateFlow<NotificationUiState> = _uiState.asStateFlow()
 
-    // --- UPDATED: This function no longer needs a userId parameter ---
-    fun fetchNotifications(unreadOnly: Boolean = false) {
+    init {
+        // Load notifications when the ViewModel is first created
+        loadNotifications()
+    }
+
+    fun loadNotifications() {
         viewModelScope.launch {
-            // 1. Get the userId safely inside the ViewModel
-            val userId = sessionManager.getUserId()
-            if (userId == null) {
-                _uiState.update { it.copy(isLoading = false, error = "User not logged in.") }
-                return@launch
-            }
-
-            _uiState.update { it.copy(isLoading = true, error = null) }
+            _uiState.update { it.copy(isLoading = true, errorMessage = null) }
             try {
-                val response = if (unreadOnly) {
-                    apiService.getUnreadNotificationList(userId)
-                } else {
-                    apiService.getNotificationList(userId)
-                }
+                val currentFilter = _uiState.value.filterType
+
+                // ⭐ USE DYNAMIC USER ID FOR API CALL
+                val response = apiService.getNotificationList(currentUserId, currentFilter)
 
                 if (response.isSuccessful) {
-                    _uiState.update {
-                        it.copy(
-                            isLoading = false,
-                            notifications = response.body()?.data ?: emptyList(),
-                            filter = if (unreadOnly) NotificationFilter.UNREAD else NotificationFilter.ALL
-                        )
+                    val body = response.body()
+                    if (body != null) {
+                        // Success: Update the UI with the data
+                        _uiState.update {
+                            it.copy(isLoading = false, notifications = body.data)
+                        }
+                    } else {
+                        throw IOException("Response body is null")
                     }
                 } else {
-                    _uiState.update {
-                        it.copy(isLoading = false, error = "Failed to load notifications.")
-                    }
+                    // Handle API error (e.g., 404, 500)
+                    throw IOException("Network call failed: ${response.code()}")
                 }
             } catch (e: Exception) {
+                // Handle network or parsing error
                 _uiState.update {
-                    it.copy(isLoading = false, error = "Error: ${e.message}")
+                    it.copy(isLoading = false, errorMessage = "Failed to load notifications: ${e.message}")
                 }
             }
         }
     }
 
-    fun markNotificationAsRead(notification: NotificationResponse) {
-        if (notification.markAsRead) return
+    fun filterNotifications(type: NotificationType?) {
+        _uiState.update { it.copy(filterType = type) }
+        // Reload notifications with the new filter
+        loadNotifications()
+    }
+
+    fun markAsRead(notificationId: Long) {
         viewModelScope.launch {
             try {
-                val response = apiService.markAsRead(notification.id)
-                if (response.isSuccessful) {
-                    val updated = response.body()?.data
-                    _uiState.update { state ->
-                        state.copy(
-                            notifications = state.notifications.map {
-                                if (it.id == updated?.id) updated else it
-                            }
-                        )
+                val response = apiService.markAsRead(notificationId)
+                if (response.isSuccessful && response.body() != null) {
+                    // Optimistically update the local list
+                    _uiState.update { currentState ->
+                        val updatedList = currentState.notifications.map {
+                            if (it.id == notificationId) it.copy(markAsRead = true) else it
+                        }
+                        currentState.copy(notifications = updatedList)
                     }
                 } else {
-                    _uiState.update { it.copy(error = "Failed to mark as read.") }
+                    // Handle failure to mark as read
+                    throw IOException("Failed to mark as read: ${response.code()}")
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = "Error marking as read: ${e.message}") }
+                // Log error
             }
         }
     }
@@ -94,41 +106,32 @@ class NotificationViewModel(application: Application) : AndroidViewModel(applica
             try {
                 val response = apiService.deleteNotification(notificationId)
                 if (response.isSuccessful) {
-                    _uiState.update { state ->
-                        state.copy(notifications = state.notifications.filterNot { it.id == notificationId })
+                    // Optimistically remove from the local list
+                    _uiState.update { currentState ->
+                        val updatedList = currentState.notifications.filterNot { it.id == notificationId }
+                        currentState.copy(notifications = updatedList)
                     }
                 } else {
-                    _uiState.update { it.copy(error = "Failed to delete notification.") }
+                    throw IOException("Failed to delete: ${response.code()}")
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = "Error deleting: ${e.message}") }
+                // Handle error
             }
         }
     }
 
-    // --- UPDATED: This function also gets the userId itself ---
     fun deleteAllNotifications() {
         viewModelScope.launch {
-            val userId = sessionManager.getUserId()
-            if (userId == null) {
-                _uiState.update { it.copy(error = "User not logged in.") }
-                return@launch
-            }
-
             try {
-                val response = apiService.deleteAllNotifications(userId)
+                val response = apiService.deleteAllNotifications(currentUserId)
                 if (response.isSuccessful) {
                     _uiState.update { it.copy(notifications = emptyList()) }
                 } else {
-                    _uiState.update { it.copy(error = "Failed to delete all notifications.") }
+                    throw IOException("Failed to delete all: ${response.code()}")
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(error = "Error deleting all: ${e.message}") }
+                // Handle error
             }
         }
-    }
-
-    fun clearError() {
-        _uiState.update { it.copy(error = null) }
     }
 }
