@@ -1,6 +1,7 @@
 package com.example.zerowaste.data.remote
 
 import com.google.gson.annotations.SerializedName
+import java.time.LocalDate
 import java.util.Date
 
 /**
@@ -37,6 +38,15 @@ data class NotificationResponse(
             NotificationType.MEAL_REMINDER -> "Meal Planner Reminder"
         }
 }
+
+data class NotificationReqDTO(
+    val notifType: NotificationType,
+    val usersId: Long,
+    val itemName: List<String>?,
+    val quantity: List<Long>?,
+    val expiryDate: LocalDate?,
+    val meal: String?
+)
 
 /**
  * Enum mirrors backend NotificationType
