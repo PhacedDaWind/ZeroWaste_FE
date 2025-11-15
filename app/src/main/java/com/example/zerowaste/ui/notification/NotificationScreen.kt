@@ -117,7 +117,8 @@ fun NotificationFilterTabs(
     selectedType: NotificationType?,
     onTabSelected: (NotificationType?) -> Unit
 ) {
-    // Use the enums you provided
+    // This list passes DONATION_CLAIMED for the Donations tab.
+    // The ViewModel interprets DONATION_CLAIMED as the dual filter.
     val tabs = listOf(null, NotificationType.FOOD_INVENTORY_ALERT, NotificationType.DONATION_CLAIMED, NotificationType.MEAL_REMINDER)
     val tabTitles = listOf("All", "Inventory", "Donations", "Meals")
 

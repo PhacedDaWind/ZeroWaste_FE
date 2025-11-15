@@ -18,8 +18,8 @@ data class NotificationResponse(
     @SerializedName("createdAt")
     val createdAt: Date,
 
-    @SerializedName("username")
-    val username: String,
+    @SerializedName("usersId")
+    val usersId: Long,
 
     @SerializedName("message")
     val message: String,
