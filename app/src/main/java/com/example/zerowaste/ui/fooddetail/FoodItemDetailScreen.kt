@@ -20,6 +20,7 @@ import com.example.zerowaste.data.remote.FoodItemDetailResponse
 @Composable
 fun FoodItemDetailScreen(
     itemId: Long,
+    isInventory: Boolean, // ⭐ --- ADDED ---
     viewModel: FoodItemDetailViewModel,
     navController: NavController
 ) {
@@ -83,7 +84,9 @@ fun FoodItemDetailScreen(
                         onActionTypeChange = { newActionType ->
                             // This calls the ViewModel function you provided
                             viewModel.updateActionType(itemId, newActionType)
-                        }
+                        },
+                        // ⭐ --- MODIFIED: Hide actions if isInventory is true ---
+                        showActions = !isInventory
                     )
                 }
                 else -> {
@@ -103,7 +106,8 @@ fun FoodItemDetailScreen(
 fun ItemDetailContent(
     item: FoodItemDetailResponse,
     isUpdating: Boolean,
-    onActionTypeChange: (String?) -> Unit // Accepts nullable String
+    onActionTypeChange: (String?) -> Unit, // Accepts nullable String
+    showActions: Boolean // ⭐ --- ADDED ---
 ) {
     val scrollState = rememberScrollState()
 
@@ -129,12 +133,14 @@ fun ItemDetailContent(
         DetailRow(label = "Remarks", value = item.remarks ?: "None")
         HorizontalDivider()
 
-        // Action Type Selector
-        ActionTypeSelector(
-            currentActionType = item.actionType,
-            isUpdating = isUpdating,
-            onActionSelected = onActionTypeChange
-        )
+        // ⭐ --- MODIFIED: Conditionally show the action selector ---
+        if (showActions) {
+            ActionTypeSelector(
+                currentActionType = item.actionType,
+                isUpdating = isUpdating,
+                onActionSelected = onActionTypeChange
+            )
+        }
     }
 }
 

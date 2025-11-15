@@ -150,20 +150,36 @@ fun AppNavigation(
                     appNavController = navController
                 )
             }
+            // ⭐ --- START OF MODIFICATION --- ⭐
             composable(
-                route = "food_detail/{itemId}",
-                arguments = listOf(navArgument("itemId") { type = NavType.LongType })
+                // 1. Add the optional query parameter to the route
+                route = "food_detail/{itemId}?isInventory={isInventory}",
+                arguments = listOf(
+                    navArgument("itemId") { type = NavType.LongType },
+
+                    // 2. Define the new argument with a default value of false
+                    navArgument("isInventory") {
+                        type = NavType.BoolType
+                        defaultValue = false
+                    }
+                )
             ) { backStackEntry ->
                 val viewModel: FoodItemDetailViewModel = viewModel()
+
+                // 3. Get the values from the backStackEntry
                 val itemId = backStackEntry.arguments?.getLong("itemId")
+                val isInventory = backStackEntry.arguments?.getBoolean("isInventory") ?: false
+
                 if (itemId != null) {
                     FoodItemDetailScreen(
                         itemId = itemId,
+                        isInventory = isInventory, // 4. Pass the new boolean to your screen
                         viewModel = viewModel,
                         navController = navController
                     )
                 }
             }
+            // ⭐ --- END OF MODIFICATION --- ⭐
         }
     }
 }
