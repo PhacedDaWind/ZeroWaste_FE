@@ -37,6 +37,9 @@ object RetrofitClient {
 
     fun getNotificationApi(context: Context): NotificationApiService =
         getRetrofit(context).create(NotificationApiService::class.java)
+
+    fun getFoodInventoryApi(context: Context): FoodInventoryApiService =
+        getRetrofit(context).create(FoodInventoryApiService::class.java)
 }
 
 
