@@ -68,11 +68,13 @@ class FoodItemDetailViewModel(application: Application) : AndroidViewModel(appli
                 )
 
                 // 2. Trigger Notification if an action was selected
+                // ⭐ CRITICAL LINE: This gets the ID of the CURRENTLY LOGGED-IN user (the claimant).
                 val userId = sessionManager.getUserId() ?: 1L
                 val item = _uiState.value.item
                 if (item == null) throw IllegalStateException("No item details loaded")
 
                 if (newActionType != null) {
+                    // Notification is sent using the claimant's ID (userId)
                     postNotification(item, userId)
                 }
 
@@ -98,6 +100,7 @@ class FoodItemDetailViewModel(application: Application) : AndroidViewModel(appli
 
     // --- Core logic: Enforce DONATION_CLAIMED type for ANY action ---
     private suspend fun postNotification(item: FoodItemDetailResponse, userId: Long) {
+        // userId here is the logged-in user's ID
         val notificationDTO = createDonationClaimedDTO(item, userId)
 
         try {
@@ -115,6 +118,7 @@ class FoodItemDetailViewModel(application: Application) : AndroidViewModel(appli
     private fun createDonationClaimedDTO(item: FoodItemDetailResponse, userId: Long): NotificationReqDTO {
         return NotificationReqDTO(
             notifType = NotificationType.DONATION_CLAIMED,
+            // ⭐ CRITICAL LINE: This ensures the database record is tagged with the specific user ID.
             usersId = userId,
             itemName = listOf(item.name),
             quantity = listOf(item.quantity.toLong()),
