@@ -6,10 +6,9 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.zerowaste.data.local.SessionManager
 import com.example.zerowaste.data.remote.FoodItemDetailResponse
-import com.example.zerowaste.data.remote.NotificationApiService
-import com.example.zerowaste.data.remote.NotificationReqDTO
-import com.example.zerowaste.data.remote.NotificationType
 import com.example.zerowaste.data.remote.RetrofitClient
+// Import the new UserInfo class
+import com.example.zerowaste.data.remote.UserInfo
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -18,20 +17,19 @@ import retrofit2.HttpException
 import java.io.IOException
 import java.util.*
 
-// --- Assume FoodItemDetailResponse and FoodItemApiService are defined in your data package ---
-
 data class FoodItemDetailUiState(
     val item: FoodItemDetailResponse? = null,
     val isLoading: Boolean = true,
     val isUpdating: Boolean = false,
     val error: String? = null,
-    val updateSuccess: Boolean = false
+    val updateSuccess: Boolean = false,
+    val isOwner: Boolean = false // ADDED: To track if the logged-in user owns this item
 )
 
 class FoodItemDetailViewModel(application: Application) : AndroidViewModel(application) {
 
     private val apiService = RetrofitClient.getBrowseFoodApi(application)
-    private val notificationApiService: NotificationApiService = RetrofitClient.getNotificationApi(application)
+    // REMOVED: private val notificationApiService
     private val sessionManager = SessionManager(application)
     private val _uiState = MutableStateFlow(FoodItemDetailUiState())
     val uiState: StateFlow<FoodItemDetailUiState> = _uiState
@@ -39,16 +37,25 @@ class FoodItemDetailViewModel(application: Application) : AndroidViewModel(appli
     fun loadItemDetails(itemId: Long) {
         viewModelScope.launch {
             _uiState.value = FoodItemDetailUiState(isLoading = true)
+            // 1. Get current user's ID
+            val currentUserId = sessionManager.getUserId() ?: -1L
+
             try {
                 val response = apiService.getFoodItemDetail(itemId)
+
+                // 2. Check if the current user is the owner
+                val isOwner = response.data?.user?.id == currentUserId
+
                 _uiState.value = FoodItemDetailUiState(
                     item = response.data,
-                    isLoading = false
+                    isLoading = false,
+                    isOwner = isOwner // 3. Set the state
                 )
             } catch (e: Exception) {
                 _uiState.value = FoodItemDetailUiState(
                     isLoading = false,
-                    error = "Failed to load item details."
+                    error = "Failed to load item details.",
+                    isOwner = false
                 )
             }
         }
@@ -58,32 +65,39 @@ class FoodItemDetailViewModel(application: Application) : AndroidViewModel(appli
         viewModelScope.launch {
             _uiState.update { it.copy(isUpdating = true, error = null) }
             try {
-                // 1. Call your existing apiService function to update the item
+                // Get the ID of the logged-in user (the one claiming the item)
+                val claimantUserId = sessionManager.getUserId() ?: 1L
+
+                // ⭐ REMOVED: val claimantUsername = sessionManager.getUsername() ...
+
                 val convertToDonationFlag = (newActionType == null)
 
+                // Call the API to update the item
+                // The backend will now handle creating the notification
                 apiService.updateFoodItemActionType(
                     itemId = itemId,
                     convertToDonation = convertToDonationFlag,
-                    actionType = newActionType
+                    actionType = newActionType,
+                    claimantUserId = claimantUserId
                 )
 
-                // 2. Trigger Notification if an action was selected
-                // ⭐ CRITICAL LINE: This gets the ID of the CURRENTLY LOGGED-IN user (the claimant).
-                val userId = sessionManager.getUserId() ?: 1L
-                val item = _uiState.value.item
-                if (item == null) throw IllegalStateException("No item details loaded")
+                // REMOVED: All notification logic (postNotification call) is gone.
 
-                if (newActionType != null) {
-                    // Notification is sent using the claimant's ID (userId)
-                    postNotification(item, userId)
-                }
-
-                // 3. Update local UI state on success
+                // Update local UI state on success
                 _uiState.update {
                     it.copy(
                         isUpdating = false,
                         updateSuccess = true,
-                        item = _uiState.value.item?.copy(actionType = newActionType)
+                        item = _uiState.value.item?.copy(
+                            actionType = newActionType,
+                            user = UserInfo( // Optimistically update owner
+                                id = claimantUserId,
+                                // ⭐ MODIFIED: Reuse the original username as a placeholder
+                                username = _uiState.value.item!!.user.username
+                            )
+                        ),
+                        // ADDED: Once claimed, the claimant becomes the new owner
+                        isOwner = true
                     )
                 }
             } catch (e: Exception) {
@@ -98,34 +112,7 @@ class FoodItemDetailViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
-    // --- Core logic: Enforce DONATION_CLAIMED type for ANY action ---
-    private suspend fun postNotification(item: FoodItemDetailResponse, userId: Long) {
-        // userId here is the logged-in user's ID
-        val notificationDTO = createDonationClaimedDTO(item, userId)
-
-        try {
-            // POST the notification to the API
-            val notificationResponse = notificationApiService.createNotification(notificationDTO)
-            if (!notificationResponse.isSuccessful) {
-                Log.e("FoodItemDetailVM", "Failed to create notification: ${notificationResponse.code()}")
-            }
-        } catch (e: Exception) {
-            Log.e("FoodItemDetailVM", "Network error during notification POST: ${e.message}")
-        }
-    }
-
-    // Helper function to build the DTO (Passes data, enforces type)
-    private fun createDonationClaimedDTO(item: FoodItemDetailResponse, userId: Long): NotificationReqDTO {
-        return NotificationReqDTO(
-            notifType = NotificationType.DONATION_CLAIMED,
-            // ⭐ CRITICAL LINE: This ensures the database record is tagged with the specific user ID.
-            usersId = userId,
-            itemName = listOf(item.name),
-            quantity = listOf(item.quantity.toLong()),
-            expiryDate = null,
-            meal = null
-        )
-    }
+    // REMOVED: The postNotification and createDonationClaimedDTO functions are gone.
 
     fun resetUpdateSuccessFlag() {
         _uiState.update { it.copy(updateSuccess = false) }
