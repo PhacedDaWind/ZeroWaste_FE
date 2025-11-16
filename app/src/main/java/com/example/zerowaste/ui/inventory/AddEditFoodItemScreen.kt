@@ -1,3 +1,5 @@
+package com.example.zerowaste.ui.inventory
+
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -15,7 +17,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import com.example.zerowaste.ui.inventory.AddEditFoodItemViewModel
 import java.util.Calendar
 import java.util.TimeZone
 
@@ -38,21 +39,22 @@ fun AddEditFoodItemScreen(
     var remarks by remember { mutableStateOf("") }
     var contactMethod by remember { mutableStateOf("") }
     var pickupLocation by remember { mutableStateOf("") }
-    var actionType by remember { mutableStateOf("PLAN_FOR_MEAL") } // Default value
     var convertToDonation by remember { mutableStateOf(false) }
     var reservedQuantity by remember { mutableStateOf("") }
 
-    var isFormValid by remember { mutableStateOf(true) }
+    // State for validation errors
+    var isNameError by remember { mutableStateOf(false) }
+    var isQuantityError by remember { mutableStateOf(false) }
+    var isReservedQtyError by remember { mutableStateOf(false) }
+
     var showDatePicker by remember { mutableStateOf(false) }
 
     // --- State Initialization ---
 
-    // This effect triggers the data loading (if in "edit" mode)
     LaunchedEffect(itemId) {
         viewModel.loadItem(itemId)
     }
 
-    // This effect pre-fills the form fields when the item data is loaded
     LaunchedEffect(uiState.item) {
         uiState.item?.let { item ->
             name = item.name
@@ -63,7 +65,6 @@ fun AddEditFoodItemScreen(
             remarks = item.remarks ?: ""
             contactMethod = item.contactMethod ?: ""
             pickupLocation = item.pickupLocation ?: ""
-            actionType = item.actionType
             convertToDonation = item.convertToDonation
             reservedQuantity = item.reservedQuantity.toString()
         }
@@ -71,7 +72,6 @@ fun AddEditFoodItemScreen(
 
     // --- Navigation and Error Handling ---
 
-    // This effect handles navigation after a successful save
     LaunchedEffect(uiState.saveSuccess) {
         if (uiState.saveSuccess) {
             Toast.makeText(context, "Item saved successfully!", Toast.LENGTH_SHORT).show()
@@ -79,10 +79,11 @@ fun AddEditFoodItemScreen(
         }
     }
 
-    // This effect shows a toast for any errors
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
             Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            // Clear the error in the ViewModel so it's only shown once
+            viewModel.clearError()
         }
     }
 
@@ -116,19 +117,24 @@ fun AddEditFoodItemScreen(
                 ) {
                     OutlinedTextField(
                         value = name,
-                        onValueChange = { name = it },
+                        onValueChange = { name = it; isNameError = false },
                         label = { Text("Item Name*") },
                         modifier = Modifier.fillMaxWidth(),
-                        isError = !isFormValid && name.isBlank(),
+                        isError = isNameError,
+                        supportingText = { if (isNameError) Text("Name cannot be empty", color = MaterialTheme.colorScheme.error) },
                         singleLine = true
                     )
                     OutlinedTextField(
                         value = quantity,
-                        onValueChange = { if (it.all { char -> char.isDigit() }) quantity = it },
+                        onValueChange = {
+                            if (it.all { char -> char.isDigit() }) quantity = it
+                            isQuantityError = false
+                        },
                         label = { Text("Quantity*") },
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        isError = !isFormValid && quantity.isBlank()
+                        isError = isQuantityError,
+                        supportingText = { if (isQuantityError) Text("Quantity cannot be empty", color = MaterialTheme.colorScheme.error) }
                     )
                     OutlinedTextField(
                         value = expiryDate ?: "",
@@ -156,41 +162,50 @@ fun AddEditFoodItemScreen(
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
-                    ActionTypeSelector(
-                        currentActionType = actionType,
-                        onActionSelected = { actionType = it }
-                    )
+
+                    // --- ACTION TYPE SELECTOR HAS BEEN REMOVED ---
+
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Convert to Donation", style = MaterialTheme.typography.bodyLarge)
+                        Text("Flag for Donation?", style = MaterialTheme.typography.bodyLarge)
                         Switch(
                             checked = convertToDonation,
                             onCheckedChange = { convertToDonation = it }
                         )
                     }
-                    OutlinedTextField(
-                        value = pickupLocation,
-                        onValueChange = { pickupLocation = it },
-                        label = { Text("Pickup Location") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = contactMethod,
-                        onValueChange = { contactMethod = it },
-                        label = { Text("Contact Method") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
+
+                    // Fields visible only if "Flag for Donation" is true
+                    if (convertToDonation) {
+                        OutlinedTextField(
+                            value = pickupLocation,
+                            onValueChange = { pickupLocation = it },
+                            label = { Text("Pickup Location") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                        OutlinedTextField(
+                            value = contactMethod,
+                            onValueChange = { contactMethod = it },
+                            label = { Text("Contact Method") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true
+                        )
+                    }
+
                     OutlinedTextField(
                         value = reservedQuantity,
-                        onValueChange = { if (it.all { char -> char.isDigit() }) reservedQuantity = it },
+                        onValueChange = {
+                            if (it.all { char -> char.isDigit() }) reservedQuantity = it
+                            isReservedQtyError = false
+                        },
                         label = { Text("Reserved Quantity") },
                         modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        isError = isReservedQtyError,
+                        supportingText = { if (isReservedQtyError) Text("Reserved quantity cannot be greater than total quantity.", color = MaterialTheme.colorScheme.error) }
                     )
                     OutlinedTextField(
                         value = remarks,
@@ -202,21 +217,27 @@ fun AddEditFoodItemScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(
                         onClick = {
-                            isFormValid = name.isNotBlank() && quantity.isNotBlank()
-                            if (isFormValid) {
+                            // --- VALIDATION LOGIC ---
+                            val quantLong = quantity.toLongOrNull() ?: 0L
+                            val reservedLong = reservedQuantity.toLongOrNull() ?: 0L
+
+                            isNameError = name.isBlank()
+                            isQuantityError = quantity.isBlank()
+                            isReservedQtyError = reservedLong > quantLong
+
+                            if (!isNameError && !isQuantityError && !isReservedQtyError) {
                                 viewModel.saveItem(
                                     itemId = itemId,
                                     name = name,
-                                    quantity = quantity.toLongOrNull() ?: 0L,
+                                    quantity = quantLong,
                                     expiryDate = expiryDate,
                                     category = category.ifBlank { null },
                                     storageLocation = storageLocation.ifBlank { null },
                                     remarks = remarks.ifBlank { null },
-                                    contactMethod = contactMethod.ifBlank { null },
-                                    pickupLocation = pickupLocation.ifBlank { null },
-                                    actionType = actionType,
+                                    contactMethod = if (convertToDonation) contactMethod.ifBlank { null } else null,
+                                    pickupLocation = if (convertToDonation) pickupLocation.ifBlank { null } else null,
                                     convertToDonation = convertToDonation,
-                                    reservedQuantity = reservedQuantity.toLongOrNull() ?: 0L
+                                    reservedQuantity = reservedLong
                                 )
                             }
                         },
@@ -253,45 +274,6 @@ fun AddEditFoodItemScreen(
             }
         ) {
             DatePicker(state = datePickerState)
-        }
-    }
-}
-
-
-// Dropdown for Action Type (copied from your FoodItemDetailScreen)
-@Composable
-fun ActionTypeSelector(
-    currentActionType: String,
-    onActionSelected: (String) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val actionTypeLabels = mapOf(
-        "MARK_AS_USED" to "Mark as used",
-        "PLAN_FOR_MEAL" to "Plan for meal",
-        "FLAG_FOR_DONATION" to "Flag for donation"
-    )
-
-    Column {
-        Text("Action Type", style = MaterialTheme.typography.bodySmall)
-        Box {
-            OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-                Text(actionTypeLabels[currentActionType] ?: currentActionType)
-            }
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                actionTypeLabels.forEach { (enumValue, label) ->
-                    DropdownMenuItem(
-                        text = { Text(label) },
-                        onClick = {
-                            onActionSelected(enumValue)
-                            expanded = false
-                        }
-                    )
-                }
-            }
         }
     }
 }

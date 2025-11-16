@@ -1,7 +1,5 @@
 package com.example.zerowaste
 
-// Import the new ViewModels
-import AddEditFoodItemScreen
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -30,6 +28,7 @@ import com.example.zerowaste.ui.fooddetail.FoodItemDetailScreen
 import com.example.zerowaste.ui.fooddetail.FoodItemDetailViewModel
 import com.example.zerowaste.ui.home.HomeScreen
 import com.example.zerowaste.ui.home.HomeViewModel
+import com.example.zerowaste.ui.inventory.AddEditFoodItemScreen
 import com.example.zerowaste.ui.inventory.AddEditFoodItemViewModel
 import com.example.zerowaste.ui.inventory.FoodInventoryScreen
 import com.example.zerowaste.ui.inventory.FoodInventoryViewModel
