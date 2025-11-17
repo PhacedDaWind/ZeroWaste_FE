@@ -156,21 +156,40 @@ fun AppNavigation(
                     }
                 )
             }
+
+            // ⭐ --- START OF MODIFICATION --- ⭐
             // Route for PUBLIC item detail (from Browse screen)
+            // This now accepts the 'isInventory' flag
             composable(
-                route = "food_detail/{itemId}",
-                arguments = listOf(navArgument("itemId") { type = NavType.LongType })
+                // 1. Add the optional query parameter to the route
+                route = "food_detail/{itemId}?isInventory={isInventory}",
+                arguments = listOf(
+                    navArgument("itemId") { type = NavType.LongType },
+
+                    // 2. Define the new argument with a default value of false
+                    navArgument("isInventory") {
+                        type = NavType.BoolType
+                        defaultValue = false
+                    }
+                )
             ) { backStackEntry ->
                 val viewModel: FoodItemDetailViewModel = viewModel()
+
+                // 3. Get the values from the backStackEntry
                 val itemId = backStackEntry.arguments?.getLong("itemId")
+                val isInventory = backStackEntry.arguments?.getBoolean("isInventory") ?: false
+
                 if (itemId != null) {
                     FoodItemDetailScreen(
                         itemId = itemId,
+                        isInventory = isInventory, // 4. Pass the new boolean to your screen
                         viewModel = viewModel,
                         navController = navController
                     )
                 }
             }
+            // ⭐ --- END OF MODIFICATION --- ⭐
+
             // Route for ADDING a new item (from Inventory screen)
             composable(route = "add_food_item") {
                 val viewModel: AddEditFoodItemViewModel = viewModel()
@@ -234,7 +253,7 @@ fun BottomBar(navController: NavHostController) {
     val screens = listOf(
         BottomBarScreen.Home,
         BottomBarScreen.Browse,
-        BottomBarScreen.Inventory,
+        BottomBarScreen.Inventory, // Teammate's new tab
         BottomBarScreen.Notifications,
         BottomBarScreen.Settings,
     )
@@ -287,17 +306,17 @@ fun BottomNavGraph(
                 appNavController = appNavController
             )
         }
-        composable(route = BottomBarScreen.Inventory.route) {
+        composable(route = BottomBarScreen.Inventory.route) { // Teammate's new route
             FoodInventoryScreen(
                 viewModel = foodInventoryViewModel,
-                navController = bottomNavController,
-                    onNavigateToAddItem = {
-                appNavController.navigate("add_food_item")
-            },
-            onNavigateToEditItem = { itemId ->
-                // Navigates to the correct "edit" route
-                appNavController.navigate("edit_food_item/$itemId")
-            }
+                navController = appNavController, // Fixed: Use appNavController for detail navigation
+                onNavigateToAddItem = {
+                    appNavController.navigate("add_food_item")
+                },
+                onNavigateToEditItem = { itemId ->
+                    // Navigates to the correct "edit" route
+                    appNavController.navigate("edit_food_item/$itemId")
+                }
             )
         }
         composable(route = BottomBarScreen.Notifications.route) {
