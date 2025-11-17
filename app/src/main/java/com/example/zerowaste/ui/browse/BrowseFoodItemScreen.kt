@@ -117,7 +117,9 @@ fun BrowseFoodItemScreen(
                         FoodItemCard(
                             item = item,
                             onClick = {
-                                appNavController.navigate("food_detail/${item.id}")
+                                // ⭐ --- THIS IS THE CORRECT LOGIC --- ⭐
+                                // Pass the "isInventory" state as a nav argument
+                                appNavController.navigate("food_detail/${item.id}?isInventory=${filters.isInventoryOnly}")
                             }
                         )
                     }
@@ -370,4 +372,3 @@ fun FoodItemCard(
         }
     }
 }
-

@@ -20,6 +20,7 @@ import com.example.zerowaste.data.remote.FoodItemDetailResponse
 @Composable
 fun FoodItemDetailScreen(
     itemId: Long,
+    isInventory: Boolean,
     viewModel: FoodItemDetailViewModel,
     navController: NavController
 ) {
@@ -81,9 +82,10 @@ fun FoodItemDetailScreen(
                         item = uiState.item!!,
                         isUpdating = uiState.isUpdating,
                         onActionTypeChange = { newActionType ->
-                            // This calls the ViewModel function you provided
                             viewModel.updateActionType(itemId, newActionType)
-                        }
+                        },
+                        showActions = !isInventory, // From "My Inventory" logic
+                        isOwner = uiState.isOwner     // ADDED: Pass the owner state
                     )
                 }
                 else -> {
@@ -103,7 +105,9 @@ fun FoodItemDetailScreen(
 fun ItemDetailContent(
     item: FoodItemDetailResponse,
     isUpdating: Boolean,
-    onActionTypeChange: (String?) -> Unit // Accepts nullable String
+    onActionTypeChange: (String?) -> Unit,
+    showActions: Boolean,
+    isOwner: Boolean // ADDED: Receive the owner state
 ) {
     val scrollState = rememberScrollState()
 
@@ -119,6 +123,12 @@ fun ItemDetailContent(
             style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
         )
+        // ADDED: Show who the owner is
+        Text(
+            text = "Posted by: ${item.user.username}",
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         HorizontalDivider()
         DetailRow(label = "Category", value = item.category ?: "N/A")
         DetailRow(label = "Quantity", value = item.quantity.toString())
@@ -129,12 +139,17 @@ fun ItemDetailContent(
         DetailRow(label = "Remarks", value = item.remarks ?: "None")
         HorizontalDivider()
 
-        // Action Type Selector
-        ActionTypeSelector(
-            currentActionType = item.actionType,
-            isUpdating = isUpdating,
-            onActionSelected = onActionTypeChange
-        )
+        // MODIFIED:
+        // The Action selector is now hidden if:
+        // 1. It's from "My Inventory" (showActions == false)
+        // 2. The logged-in user is the owner (isOwner == true)
+        if (showActions && !isOwner) {
+            ActionTypeSelector(
+                currentActionType = item.actionType,
+                isUpdating = isUpdating,
+                onActionSelected = onActionTypeChange
+            )
+        }
     }
 }
 
