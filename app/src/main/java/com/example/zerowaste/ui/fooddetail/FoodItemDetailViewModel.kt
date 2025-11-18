@@ -4,83 +4,121 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.zerowaste.data.remote.ApiErrorResponse
+import com.example.zerowaste.data.local.SessionManager
 import com.example.zerowaste.data.remote.FoodItemDetailResponse
 import com.example.zerowaste.data.remote.RetrofitClient
-import com.google.gson.Gson
+// Import the new UserInfo class
+import com.example.zerowaste.data.remote.UserInfo
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import retrofit2.HttpException
 import java.io.IOException
+import java.util.*
 
-// This data class will hold all the state for the Food Item Detail screen
 data class FoodItemDetailUiState(
     val item: FoodItemDetailResponse? = null,
     val isLoading: Boolean = true,
-    val isUpdating: Boolean = false, // For showing a spinner during update
+    val isUpdating: Boolean = false,
     val error: String? = null,
-    val updateSuccess: Boolean = false
+    val updateSuccess: Boolean = false,
+    val isOwner: Boolean = false // ADDED: To track if the logged-in user owns this item
 )
 
 class FoodItemDetailViewModel(application: Application) : AndroidViewModel(application) {
 
     private val apiService = RetrofitClient.getBrowseFoodApi(application)
-
+    // REMOVED: private val notificationApiService
+    private val sessionManager = SessionManager(application)
     private val _uiState = MutableStateFlow(FoodItemDetailUiState())
     val uiState: StateFlow<FoodItemDetailUiState> = _uiState
 
-    // Called by the UI to start loading the data
     fun loadItemDetails(itemId: Long) {
         viewModelScope.launch {
             _uiState.value = FoodItemDetailUiState(isLoading = true)
+            // 1. Get current user's ID
+            val currentUserId = sessionManager.getUserId() ?: -1L
+
             try {
                 val response = apiService.getFoodItemDetail(itemId)
+
+                // 2. Check if the current user is the owner
+                val isOwner = response.data?.user?.id == currentUserId
+
                 _uiState.value = FoodItemDetailUiState(
                     item = response.data,
-                    isLoading = false
+                    isLoading = false,
+                    isOwner = isOwner // 3. Set the state
                 )
             } catch (e: Exception) {
                 _uiState.value = FoodItemDetailUiState(
                     isLoading = false,
-                    error = "Failed to load item details."
+                    error = "Failed to load item details.",
+                    isOwner = false
                 )
             }
         }
     }
 
-    // Called by the UI when the user selects a new action type
-    fun updateActionType(itemId: Long, newActionType: String) {
+    fun updateActionType(itemId: Long, newActionType: String?) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isUpdating = true, error = null)
+            _uiState.update { it.copy(isUpdating = true, error = null) }
             try {
-                apiService.updateFoodItemActionType(itemId, newActionType)
+                // Get the ID of the logged-in user (the one claiming the item)
+                val claimantUserId = sessionManager.getUserId() ?: 1L
 
-                // On success, update the local state to reflect the change immediately
-                _uiState.value = _uiState.value.copy(
-                    isUpdating = false,
-                    updateSuccess = true,
-                    item = _uiState.value.item?.copy(actionType = newActionType)
+                // ⭐ REMOVED: val claimantUsername = sessionManager.getUsername() ...
+
+                val convertToDonationFlag = (newActionType == null)
+
+                // Call the API to update the item
+                // The backend will now handle creating the notification
+                apiService.updateFoodItemActionType(
+                    itemId = itemId,
+                    convertToDonation = convertToDonationFlag,
+                    actionType = newActionType,
+                    claimantUserId = claimantUserId
                 )
+
+                // REMOVED: All notification logic (postNotification call) is gone.
+
+                // Update local UI state on success
+                _uiState.update {
+                    it.copy(
+                        isUpdating = false,
+                        updateSuccess = true,
+                        item = _uiState.value.item?.copy(
+                            actionType = newActionType,
+                            user = UserInfo( // Optimistically update owner
+                                id = claimantUserId,
+                                // ⭐ MODIFIED: Reuse the original username as a placeholder
+                                username = _uiState.value.item!!.user.username
+                            )
+                        ),
+                        // ADDED: Once claimed, the claimant becomes the new owner
+                        isOwner = true
+                    )
+                }
             } catch (e: Exception) {
-                // --- THIS BLOCK IS NOW MORE DETAILED ---
-                Log.e("FoodItemDetailVM", "Error updating action type", e) // Log the full error
+                Log.e("FoodItemDetailVM", "Error updating action type", e)
                 val errorMessage = when (e) {
                     is HttpException -> "Update failed: HTTP ${e.code()}. Check backend logs."
                     is IOException -> "Network error. Please check your connection."
                     else -> "An unexpected error occurred during update."
                 }
-                _uiState.value = _uiState.value.copy(
-                    isUpdating = false,
-                    error = errorMessage
-                )
+                _uiState.update { it.copy(isUpdating = false, error = errorMessage) }
             }
         }
     }
 
-    // Called by the UI after the success message has been shown
+    // REMOVED: The postNotification and createDonationClaimedDTO functions are gone.
+
     fun resetUpdateSuccessFlag() {
-        _uiState.value = _uiState.value.copy(updateSuccess = false)
+        _uiState.update { it.copy(updateSuccess = false) }
+    }
+
+    fun resetState() {
+        _uiState.update { FoodItemDetailUiState() }
     }
 }
-

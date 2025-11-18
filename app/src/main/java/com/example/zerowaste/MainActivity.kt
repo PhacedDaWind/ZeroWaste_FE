@@ -1,6 +1,5 @@
 package com.example.zerowaste
 
-// Import the new ViewModels
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -15,7 +14,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -24,13 +22,16 @@ import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
 import androidx.navigation.navArgument
-import com.example.zerowaste.data.local.SessionManager
 import com.example.zerowaste.ui.browse.BrowseFoodItemScreen
 import com.example.zerowaste.ui.browse.BrowseFoodItemViewModel
 import com.example.zerowaste.ui.fooddetail.FoodItemDetailScreen
 import com.example.zerowaste.ui.fooddetail.FoodItemDetailViewModel
 import com.example.zerowaste.ui.home.HomeScreen
 import com.example.zerowaste.ui.home.HomeViewModel
+import com.example.zerowaste.ui.inventory.AddEditFoodItemScreen
+import com.example.zerowaste.ui.inventory.AddEditFoodItemViewModel
+import com.example.zerowaste.ui.inventory.FoodInventoryScreen
+import com.example.zerowaste.ui.inventory.FoodInventoryViewModel
 import com.example.zerowaste.ui.login.LoginFlow
 import com.example.zerowaste.ui.login.LoginViewModel
 import com.example.zerowaste.ui.notification.NotificationScreen
@@ -44,7 +45,7 @@ import com.example.zerowaste.ui.setting.SettingsScreen
 import com.example.zerowaste.ui.theme.ZeroWasteTheme
 
 
-// Sealed class for Bottom Bar routes remains the same
+// Sealed class for Bottom Bar routes
 sealed class BottomBarScreen(
     val route: String,
     val title: String,
@@ -52,6 +53,7 @@ sealed class BottomBarScreen(
 ) {
     object Home : BottomBarScreen("home", "Home", Icons.Default.Home)
     object Browse : BottomBarScreen("browse", "Browse", Icons.Default.Search)
+    object Inventory : BottomBarScreen("inventory", "My Items", Icons.Default.Inventory)
     object Notifications : BottomBarScreen("notifications", "Notifications", Icons.Default.Notifications)
     object Settings : BottomBarScreen("settings", "Settings", Icons.Default.Settings)
 }
@@ -64,6 +66,8 @@ class MainActivity : ComponentActivity() {
     private val notificationViewModel: NotificationViewModel by viewModels()
     private val browseFoodItemViewModel: BrowseFoodItemViewModel by viewModels()
     private val passwordResetViewModel: PasswordResetViewModel by viewModels()
+    private val foodInventoryViewModel: FoodInventoryViewModel by viewModels()
+    // AddEdit and Detail ViewModels are scoped to their routes, not created here.
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -77,7 +81,8 @@ class MainActivity : ComponentActivity() {
                         settingsViewModel,
                         notificationViewModel,
                         browseFoodItemViewModel,
-                        passwordResetViewModel
+                        passwordResetViewModel,
+                        foodInventoryViewModel
                     )
                 }
             }
@@ -93,7 +98,8 @@ fun AppNavigation(
     settingsViewModel: SettingsViewModel,
     notificationViewModel: NotificationViewModel,
     browseFoodItemViewModel: BrowseFoodItemViewModel,
-    passwordResetViewModel: PasswordResetViewModel
+    passwordResetViewModel: PasswordResetViewModel,
+    foodInventoryViewModel: FoodInventoryViewModel
 ) {
     val navController = rememberNavController()
     NavHost(navController = navController, startDestination = "login") {
@@ -128,15 +134,17 @@ fun AppNavigation(
             )
         }
 
+        // --- MAIN APPLICATION GRAPH ---
         navigation(startDestination = "main_screens", route = "main") {
             composable("main_screens") {
-                // The onLogout logic is now defined here
                 MainAppScreen(
+                    appNavController = navController,
                     homeViewModel = homeViewModel,
                     settingsViewModel = settingsViewModel,
                     loginViewModel = loginViewModel,
                     notificationViewModel = notificationViewModel,
                     browseFoodItemViewModel = browseFoodItemViewModel,
+                    foodInventoryViewModel = foodInventoryViewModel,
                     onLogout = {
                         loginViewModel.clearLoginResult()
                         navController.navigate("login") {
@@ -145,20 +153,62 @@ fun AppNavigation(
                             }
                             launchSingleTop = true
                         }
-                    },
-                    // We also pass the main NavController for detail navigation
-                    appNavController = navController
+                    }
                 )
             }
+
+            // ⭐ --- START OF MODIFICATION --- ⭐
+            // Route for PUBLIC item detail (from Browse screen)
+            // This now accepts the 'isInventory' flag
             composable(
-                route = "food_detail/{itemId}",
-                arguments = listOf(navArgument("itemId") { type = NavType.LongType })
+                // 1. Add the optional query parameter to the route
+                route = "food_detail/{itemId}?isInventory={isInventory}",
+                arguments = listOf(
+                    navArgument("itemId") { type = NavType.LongType },
+
+                    // 2. Define the new argument with a default value of false
+                    navArgument("isInventory") {
+                        type = NavType.BoolType
+                        defaultValue = false
+                    }
+                )
             ) { backStackEntry ->
                 val viewModel: FoodItemDetailViewModel = viewModel()
+
+                // 3. Get the values from the backStackEntry
                 val itemId = backStackEntry.arguments?.getLong("itemId")
+                val isInventory = backStackEntry.arguments?.getBoolean("isInventory") ?: false
+
                 if (itemId != null) {
                     FoodItemDetailScreen(
                         itemId = itemId,
+                        isInventory = isInventory, // 4. Pass the new boolean to your screen
+                        viewModel = viewModel,
+                        navController = navController
+                    )
+                }
+            }
+            // ⭐ --- END OF MODIFICATION --- ⭐
+
+            // Route for ADDING a new item (from Inventory screen)
+            composable(route = "add_food_item") {
+                val viewModel: AddEditFoodItemViewModel = viewModel()
+                AddEditFoodItemScreen(
+                    itemId = null, // null signifies "Create" mode
+                    viewModel = viewModel,
+                    navController = navController
+                )
+            }
+            // Route for EDITING an item (from Inventory screen)
+            composable(
+                route = "edit_food_item/{itemId}",
+                arguments = listOf(navArgument("itemId") { type = NavType.LongType })
+            ) { backStackEntry ->
+                val viewModel: AddEditFoodItemViewModel = viewModel()
+                val itemId = backStackEntry.arguments?.getLong("itemId")
+                if (itemId != null) {
+                    AddEditFoodItemScreen(
+                        itemId = itemId, // Pass the ID for "Edit" mode
                         viewModel = viewModel,
                         navController = navController
                     )
@@ -176,7 +226,8 @@ fun MainAppScreen(
     loginViewModel: LoginViewModel,
     notificationViewModel: NotificationViewModel,
     browseFoodItemViewModel: BrowseFoodItemViewModel,
-    onLogout: () -> Unit // It now accepts both NavController and onLogout
+    foodInventoryViewModel: FoodInventoryViewModel,
+    onLogout: () -> Unit
 ) {
     val bottomNavController = rememberNavController()
     Scaffold(
@@ -184,8 +235,6 @@ fun MainAppScreen(
     ) { innerPadding ->
         Box(modifier = Modifier.padding(innerPadding)) {
             BottomNavGraph(
-                // --- THIS IS THE FIX ---
-                // We pass the CORRECT appNavController down from the parameters
                 appNavController = appNavController,
                 bottomNavController = bottomNavController,
                 homeViewModel = homeViewModel,
@@ -193,7 +242,8 @@ fun MainAppScreen(
                 loginViewModel = loginViewModel,
                 notificationViewModel = notificationViewModel,
                 browseFoodItemViewModel = browseFoodItemViewModel,
-                onLogout = onLogout // And we also pass the onLogout lambda
+                foodInventoryViewModel = foodInventoryViewModel,
+                onLogout = onLogout
             )
         }
     }
@@ -203,6 +253,7 @@ fun BottomBar(navController: NavHostController) {
     val screens = listOf(
         BottomBarScreen.Home,
         BottomBarScreen.Browse,
+        BottomBarScreen.Inventory, // Teammate's new tab
         BottomBarScreen.Notifications,
         BottomBarScreen.Settings,
     )
@@ -239,7 +290,8 @@ fun BottomNavGraph(
     loginViewModel: LoginViewModel,
     notificationViewModel: NotificationViewModel,
     browseFoodItemViewModel: BrowseFoodItemViewModel,
-    onLogout: () -> Unit // It correctly accepts the onLogout lambda
+    foodInventoryViewModel: FoodInventoryViewModel,
+    onLogout: () -> Unit
 ) {
     NavHost(
         navController = bottomNavController,
@@ -254,13 +306,26 @@ fun BottomNavGraph(
                 appNavController = appNavController
             )
         }
+        composable(route = BottomBarScreen.Inventory.route) { // Teammate's new route
+            FoodInventoryScreen(
+                viewModel = foodInventoryViewModel,
+                navController = appNavController, // Fixed: Use appNavController for detail navigation
+                onNavigateToAddItem = {
+                    appNavController.navigate("add_food_item")
+                },
+                onNavigateToEditItem = { itemId ->
+                    // Navigates to the correct "edit" route
+                    appNavController.navigate("edit_food_item/$itemId")
+                }
+            )
+        }
         composable(route = BottomBarScreen.Notifications.route) {
             NotificationScreen(viewModel = notificationViewModel)
         }
         composable(route = BottomBarScreen.Settings.route) {
             SettingsScreen(
                 viewModel = settingsViewModel,
-                onLogout = onLogout // It correctly passes the lambda to the SettingsScreen
+                onLogout = onLogout
             )
         }
     }

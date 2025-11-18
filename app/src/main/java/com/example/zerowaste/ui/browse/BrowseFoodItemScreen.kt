@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape // Added import
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Clear
@@ -32,6 +33,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface // Added import just in case, though usually included in material3.*
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -97,7 +99,6 @@ fun BrowseFoodItemScreen(
                         .padding(16.dp)
                 )
             } else if (uiState.items.isEmpty()) {
-                // --- ADDED: Empty state message ---
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -117,7 +118,7 @@ fun BrowseFoodItemScreen(
                         FoodItemCard(
                             item = item,
                             onClick = {
-                                appNavController.navigate("food_detail/${item.id}")
+                                appNavController.navigate("food_detail/${item.id}?isInventory=${filters.isInventoryOnly}")
                             }
                         )
                     }
@@ -170,9 +171,9 @@ fun FilterBar(
     var categoryQuery by remember { mutableStateOf(filters.category ?: "") }
     var storageQuery by remember { mutableStateOf(filters.storageLocation ?: "") }
 
-    // --- MODIFIED: Debouncing logic for automatic search ---
+    // Debouncing logic for automatic search
     LaunchedEffect(nameQuery) {
-        delay(500L) // Wait for 500ms after user stops typing
+        delay(500L)
         if (nameQuery != filters.name) {
             onNameSearch(nameQuery)
         }
@@ -242,7 +243,6 @@ fun FilterBar(
             )
         }
 
-        // --- MODIFIED: Search field for Name with automatic search ---
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -265,7 +265,6 @@ fun FilterBar(
             )
         }
 
-        // --- MODIFIED: Search fields with automatic search ---
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -304,7 +303,6 @@ fun FilterBar(
         }
     }
 
-    // --- MODIFIED: Date Picker Dialog with a Clear button ---
     if (showDatePicker) {
         val datePickerState = rememberDatePickerState()
         DatePickerDialog(
@@ -321,7 +319,7 @@ fun FilterBar(
                 Row {
                     TextButton(
                         onClick = {
-                            onDateSelected(null) // Clear the date
+                            onDateSelected(null)
                             showDatePicker = false
                         }
                     ) { Text("Clear") }
@@ -346,11 +344,37 @@ fun FoodItemCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = item.itemName,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold
-            )
+
+            // --- UPDATED Header Row with Donation Badge ---
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = item.itemName,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+
+                if (item.convertToDonation) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.padding(start = 8.dp)
+                    ) {
+                        Text(
+                            text = "Donation",
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -370,4 +394,3 @@ fun FoodItemCard(
         }
     }
 }
-

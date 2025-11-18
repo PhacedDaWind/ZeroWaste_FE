@@ -1,15 +1,12 @@
 package com.example.zerowaste.data.remote
 
 import com.google.gson.annotations.SerializedName
+import java.time.LocalDate
 import java.util.Date
 
 /**
  * Generic response wrapper (matches backend ResponseDTO)
  */
-data class ResponseDTO<T>(
-    @SerializedName("data")
-    val data: T
-)
 
 /**
  * Notification model matching backend NotificationResDTO
@@ -21,8 +18,8 @@ data class NotificationResponse(
     @SerializedName("createdAt")
     val createdAt: Date,
 
-    @SerializedName("username")
-    val username: String,
+    @SerializedName("usersId")
+    val usersId: Long,
 
     @SerializedName("message")
     val message: String,
@@ -41,6 +38,15 @@ data class NotificationResponse(
             NotificationType.MEAL_REMINDER -> "Meal Planner Reminder"
         }
 }
+
+data class NotificationReqDTO(
+    val notifType: NotificationType,
+    val usersId: Long,
+    val itemName: List<String>?,
+    val quantity: List<Long>?,
+    val expiryDate: LocalDate?,
+    val meal: String?
+)
 
 /**
  * Enum mirrors backend NotificationType
