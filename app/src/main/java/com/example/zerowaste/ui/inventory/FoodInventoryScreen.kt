@@ -68,7 +68,7 @@ fun FoodInventoryScreen(
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             } else if (uiState.items.isEmpty()) {
                 Text(
-                    text = "Your inventory is empty. Tap the '+' button to add an item.",
+                    text = "Your inventory is empty.\nTap the '+' button to add an item.",
                     modifier = Modifier.align(Alignment.Center)
                 )
             } else {
