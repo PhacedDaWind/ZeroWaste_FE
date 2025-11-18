@@ -48,10 +48,16 @@ fun AddEditFoodItemScreen(
 
     // State for validation errors
     var isNameError by remember { mutableStateOf(false) }
+
+    // Quantity errors
     var isQuantityError by remember { mutableStateOf(false) }
+    var quantityErrorMessage by remember { mutableStateOf("") } // New state for dynamic message
+
     var isReservedQtyError by remember { mutableStateOf(false) }
+
+    // Donation errors
     var isDonationQtyError by remember { mutableStateOf(false) }
-    var donationQtyErrorMessage by remember { mutableStateOf("") } // For multiple error messages
+    var donationQtyErrorMessage by remember { mutableStateOf("") }
 
     var showDatePicker by remember { mutableStateOf(false) }
 
@@ -131,9 +137,12 @@ fun AddEditFoodItemScreen(
                         supportingText = { if (isNameError) Text("Name cannot be empty", color = MaterialTheme.colorScheme.error) },
                         singleLine = true
                     )
+
+                    // --- UPDATED QUANTITY FIELD ---
                     OutlinedTextField(
                         value = quantity,
                         onValueChange = {
+                            // Only allow numeric input
                             if (it.all { char -> char.isDigit() }) quantity = it
                             isQuantityError = false
                         },
@@ -141,8 +150,11 @@ fun AddEditFoodItemScreen(
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         isError = isQuantityError,
-                        supportingText = { if (isQuantityError) Text("Quantity cannot be empty", color = MaterialTheme.colorScheme.error) }
+                        supportingText = {
+                            if (isQuantityError) Text(quantityErrorMessage, color = MaterialTheme.colorScheme.error)
+                        }
                     )
+
                     OutlinedTextField(
                         value = expiryDate ?: "",
                         onValueChange = {},
@@ -175,7 +187,7 @@ fun AddEditFoodItemScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Convert to donation", style = MaterialTheme.typography.bodyLarge)
+                        Text("Flag for Donation?", style = MaterialTheme.typography.bodyLarge)
                         Switch(
                             checked = convertToDonation,
                             onCheckedChange = {
@@ -267,16 +279,26 @@ fun AddEditFoodItemScreen(
                             isReservedQtyError = false
                             isDonationQtyError = false
 
-                            // Check errors one by one
+                            // 1. Check Name
                             if (name.isBlank()) {
                                 isNameError = true
                             }
+
+                            // 2. Check Quantity (Empty OR <= 0)
                             if (quantity.isBlank()) {
                                 isQuantityError = true
+                                quantityErrorMessage = "Quantity cannot be empty"
+                            } else if (quantLong <= 0) {
+                                isQuantityError = true
+                                quantityErrorMessage = "Quantity must be greater than 0"
                             }
+
+                            // 3. Check Reserved
                             if (reservedLong > quantLong) {
                                 isReservedQtyError = true
                             }
+
+                            // 4. Check Donation
                             if (donationFieldsAreVisible) {
                                 if (donationQuantity.isBlank()) {
                                     isDonationQtyError = true
@@ -287,7 +309,7 @@ fun AddEditFoodItemScreen(
                                 }
                             }
 
-                            // Final check
+                            // Final check: proceed if no errors
                             if (!isNameError && !isQuantityError && !isReservedQtyError && !isDonationQtyError) {
                                 viewModel.saveItem(
                                     itemId = itemId,

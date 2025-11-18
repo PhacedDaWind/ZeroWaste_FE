@@ -72,6 +72,16 @@ class AddEditFoodItemViewModel(application: Application) : AndroidViewModel(appl
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
             // --- VALIDATION LOGIC ---
+
+            // 1. NEW CHECK: Quantity must be positive
+            if (quantity <= 0) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = "Quantity must be greater than 0."
+                )
+                return@launch
+            }
+
             if (reservedQuantity > quantity) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -80,16 +90,16 @@ class AddEditFoodItemViewModel(application: Application) : AndroidViewModel(appl
                 return@launch
             }
 
-            if (convertToDonation && (donationQuantity == null || donationQuantity == 0L)) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = "Donation quantity is required when flagging for donation."
-                )
-                return@launch
-            }
+            if (convertToDonation) {
+                if (donationQuantity == null || donationQuantity == 0L) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        error = "Donation quantity is required when flagging for donation."
+                    )
+                    return@launch
+                }
 
-            // --- 1. NEW VALIDATION CHECK ---
-            if (convertToDonation && donationQuantity != null) {
+                // Check if donation quantity exceeds available quantity
                 val availableQuantity = quantity - reservedQuantity
                 if (donationQuantity > availableQuantity) {
                     _uiState.value = _uiState.value.copy(
@@ -98,8 +108,19 @@ class AddEditFoodItemViewModel(application: Application) : AndroidViewModel(appl
                     )
                     return@launch
                 }
+
+                // Expiry Date Check
+                if (expiryDate != null) {
+                    val today = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+                    if (expiryDate < today) {
+                        _uiState.value = _uiState.value.copy(
+                            isLoading = false,
+                            error = "You cannot donate an expired food item."
+                        )
+                        return@launch
+                    }
+                }
             }
-            // --- END OF NEW CHECK ---
 
             val userId = sessionManager.getUserId()
             if (userId == null) {
@@ -107,11 +128,7 @@ class AddEditFoodItemViewModel(application: Application) : AndroidViewModel(appl
                 return@launch
             }
 
-            val actionType = if (convertToDonation){
-                null
-            }else {
-                _uiState.value.item?.actionType ?: "PLAN_FOR_MEAL"
-            }
+            val actionType = _uiState.value.item?.actionType ?: "PLAN_FOR_MEAL"
 
             val request = FoodItemRequest(
                 name = name,
@@ -146,6 +163,7 @@ class AddEditFoodItemViewModel(application: Application) : AndroidViewModel(appl
         _uiState.value = _uiState.value.copy(error = null)
     }
 
+    // Helper functions...
     fun formatMillisToDateString(millis: Long): String {
         val date = Date(millis)
         val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())

@@ -6,6 +6,7 @@ import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.PUT
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 
 interface FoodInventoryApiService {
@@ -41,4 +42,6 @@ interface FoodInventoryApiService {
     @DELETE("api/food-inventory/{id}")
     suspend fun deleteFoodItem(@Path("id") itemId: Long): ApiResponse<String>
 
+    @GET("api/food-inventory/expiring-list")
+    suspend fun getExpiringItems(@Query("userId") userId: Long): ApiResponse<List<ExpiringItemResponse>>
 }
