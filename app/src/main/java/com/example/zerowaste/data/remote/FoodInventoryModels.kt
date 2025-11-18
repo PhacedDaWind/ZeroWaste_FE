@@ -13,7 +13,7 @@ data class FoodItemRequest(
     val remarks: String?,
     val contactMethod: String?,
     val pickupLocation: String?,
-    val actionType: String, // e.g., "PLAN_FOR_MEAL"
+    val actionType: String?, // e.g., "PLAN_FOR_MEAL"
     val userId: Long,
     val convertToDonation: Boolean,
     val reservedQuantity: Long?,

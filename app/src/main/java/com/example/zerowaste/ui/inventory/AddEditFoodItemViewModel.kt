@@ -107,7 +107,11 @@ class AddEditFoodItemViewModel(application: Application) : AndroidViewModel(appl
                 return@launch
             }
 
-            val actionType = _uiState.value.item?.actionType ?: "PLAN_FOR_MEAL"
+            val actionType = if (convertToDonation){
+                null
+            }else {
+                _uiState.value.item?.actionType ?: "PLAN_FOR_MEAL"
+            }
 
             val request = FoodItemRequest(
                 name = name,
