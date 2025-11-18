@@ -264,7 +264,9 @@ fun BottomBar(navController: NavHostController) {
         screens.forEach { screen ->
             NavigationBarItem(
                 icon = { Icon(screen.icon, contentDescription = null) },
-                label = { Text(screen.title, style = MaterialTheme.typography.labelSmall)},
+                label = { Text(screen.title,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1)},
                 selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
                 onClick = {
                     navController.navigate(screen.route) {
