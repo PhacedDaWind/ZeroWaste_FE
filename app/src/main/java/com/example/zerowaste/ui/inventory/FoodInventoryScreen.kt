@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -88,6 +89,7 @@ fun FoodInventoryScreen(
     }
 }
 
+// --- THIS IS THE UPDATED CARD ---
 @Composable
 fun InventoryItemCard(
     item: BrowseFoodItemResponse,
@@ -106,11 +108,36 @@ fun InventoryItemCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = item.itemName,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
+
+                // 1. Header Row with Name and Donation Badge
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = item.itemName,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        // Allow text to wrap if badge is present
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+
+                    // --- THE NEW INDICATOR ---
+                    if (item.convertToDonation) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.tertiaryContainer,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.padding(start = 8.dp)
+                        ) {
+                            Text(
+                                text = "Donation",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                // 2. Item details
                 Text("Quantity: ${item.quantity}", style = MaterialTheme.typography.bodyMedium)
                 Text("Expires: ${item.expiryDate ?: "N/A"}", style = MaterialTheme.typography.bodyMedium)
             }

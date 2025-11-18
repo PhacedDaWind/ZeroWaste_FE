@@ -16,7 +16,8 @@ data class FoodItemRequest(
     val actionType: String, // e.g., "PLAN_FOR_MEAL"
     val userId: Long,
     val convertToDonation: Boolean,
-    val reservedQuantity: Long?
+    val reservedQuantity: Long?,
+    val donationQuantity: Long?
 )
 
 // --- This matches your backend's FoodItemResDTO ---
