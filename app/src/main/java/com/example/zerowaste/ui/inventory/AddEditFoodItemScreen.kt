@@ -1,6 +1,7 @@
 package com.example.zerowaste.ui.inventory
 
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -41,11 +42,16 @@ fun AddEditFoodItemScreen(
     var pickupLocation by remember { mutableStateOf("") }
     var convertToDonation by remember { mutableStateOf(false) }
     var reservedQuantity by remember { mutableStateOf("") }
+    var donationQuantity by remember { mutableStateOf("") }
+
+    var initialDonationState by remember { mutableStateOf(false) }
 
     // State for validation errors
     var isNameError by remember { mutableStateOf(false) }
     var isQuantityError by remember { mutableStateOf(false) }
     var isReservedQtyError by remember { mutableStateOf(false) }
+    var isDonationQtyError by remember { mutableStateOf(false) }
+    var donationQtyErrorMessage by remember { mutableStateOf("") } // For multiple error messages
 
     var showDatePicker by remember { mutableStateOf(false) }
 
@@ -67,11 +73,12 @@ fun AddEditFoodItemScreen(
             pickupLocation = item.pickupLocation ?: ""
             convertToDonation = item.convertToDonation
             reservedQuantity = item.reservedQuantity.toString()
+
+            initialDonationState = item.convertToDonation
         }
     }
 
     // --- Navigation and Error Handling ---
-
     LaunchedEffect(uiState.saveSuccess) {
         if (uiState.saveSuccess) {
             Toast.makeText(context, "Item saved successfully!", Toast.LENGTH_SHORT).show()
@@ -82,7 +89,6 @@ fun AddEditFoodItemScreen(
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
             Toast.makeText(context, it, Toast.LENGTH_LONG).show()
-            // Clear the error in the ViewModel so it's only shown once
             viewModel.clearError()
         }
     }
@@ -115,6 +121,7 @@ fun AddEditFoodItemScreen(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+
                     OutlinedTextField(
                         value = name,
                         onValueChange = { name = it; isNameError = false },
@@ -163,36 +170,65 @@ fun AddEditFoodItemScreen(
                         singleLine = true
                     )
 
-                    // --- ACTION TYPE SELECTOR HAS BEEN REMOVED ---
-
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Flag for Donation?", style = MaterialTheme.typography.bodyLarge)
+                        Text("Convert to donation", style = MaterialTheme.typography.bodyLarge)
                         Switch(
                             checked = convertToDonation,
-                            onCheckedChange = { convertToDonation = it }
+                            onCheckedChange = {
+                                convertToDonation = it
+                                if (!it) {
+                                    pickupLocation = ""
+                                    contactMethod = ""
+                                    donationQuantity = ""
+                                    isDonationQtyError = false
+                                }
+                            }
                         )
                     }
 
-                    // Fields visible only if "Flag for Donation" is true
-                    if (convertToDonation) {
-                        OutlinedTextField(
-                            value = pickupLocation,
-                            onValueChange = { pickupLocation = it },
-                            label = { Text("Pickup Location") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-                        OutlinedTextField(
-                            value = contactMethod,
-                            onValueChange = { contactMethod = it },
-                            label = { Text("Contact Method") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
+                    // --- Conditional Donation Fields ---
+                    val showDonationFields = convertToDonation && !initialDonationState
+
+                    AnimatedVisibility(visible = showDonationFields) {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text(
+                                "Please provide donation details:",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            OutlinedTextField(
+                                value = donationQuantity,
+                                onValueChange = {
+                                    if (it.all { char -> char.isDigit() }) donationQuantity = it
+                                    isDonationQtyError = false
+                                },
+                                label = { Text("Donation Quantity*") },
+                                modifier = Modifier.fillMaxWidth(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                isError = isDonationQtyError,
+                                supportingText = {
+                                    if (isDonationQtyError) Text(donationQtyErrorMessage, color = MaterialTheme.colorScheme.error)
+                                }
+                            )
+                            OutlinedTextField(
+                                value = pickupLocation,
+                                onValueChange = { pickupLocation = it },
+                                label = { Text("Pickup Location") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                value = contactMethod,
+                                onValueChange = { contactMethod = it },
+                                label = { Text("Contact Method") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+                        }
                     }
 
                     OutlinedTextField(
@@ -220,12 +256,39 @@ fun AddEditFoodItemScreen(
                             // --- VALIDATION LOGIC ---
                             val quantLong = quantity.toLongOrNull() ?: 0L
                             val reservedLong = reservedQuantity.toLongOrNull() ?: 0L
+                            val donationLong = donationQuantity.toLongOrNull()
 
-                            isNameError = name.isBlank()
-                            isQuantityError = quantity.isBlank()
-                            isReservedQtyError = reservedLong > quantLong
+                            val donationFieldsAreVisible = convertToDonation && !initialDonationState
+                            val availableQuantity = quantLong - reservedLong
 
-                            if (!isNameError && !isQuantityError && !isReservedQtyError) {
+                            // Reset all errors
+                            isNameError = false
+                            isQuantityError = false
+                            isReservedQtyError = false
+                            isDonationQtyError = false
+
+                            // Check errors one by one
+                            if (name.isBlank()) {
+                                isNameError = true
+                            }
+                            if (quantity.isBlank()) {
+                                isQuantityError = true
+                            }
+                            if (reservedLong > quantLong) {
+                                isReservedQtyError = true
+                            }
+                            if (donationFieldsAreVisible) {
+                                if (donationQuantity.isBlank()) {
+                                    isDonationQtyError = true
+                                    donationQtyErrorMessage = "Donation quantity is required."
+                                } else if (donationLong != null && donationLong > availableQuantity) {
+                                    isDonationQtyError = true
+                                    donationQtyErrorMessage = "Donation quantity cannot exceed available quantity (${availableQuantity})."
+                                }
+                            }
+
+                            // Final check
+                            if (!isNameError && !isQuantityError && !isReservedQtyError && !isDonationQtyError) {
                                 viewModel.saveItem(
                                     itemId = itemId,
                                     name = name,
@@ -237,7 +300,8 @@ fun AddEditFoodItemScreen(
                                     contactMethod = if (convertToDonation) contactMethod.ifBlank { null } else null,
                                     pickupLocation = if (convertToDonation) pickupLocation.ifBlank { null } else null,
                                     convertToDonation = convertToDonation,
-                                    reservedQuantity = reservedLong
+                                    reservedQuantity = reservedLong,
+                                    donationQuantity = if (donationFieldsAreVisible) donationLong else null
                                 )
                             }
                         },

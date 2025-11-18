@@ -64,14 +64,14 @@ class AddEditFoodItemViewModel(application: Application) : AndroidViewModel(appl
         remarks: String?,
         contactMethod: String?,
         pickupLocation: String?,
-        // actionType is removed from parameters
         convertToDonation: Boolean,
-        reservedQuantity: Long
+        reservedQuantity: Long,
+        donationQuantity: Long?
     ) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
-            // --- 1. ADDED: Reserved Quantity Validation ---
+            // --- VALIDATION LOGIC ---
             if (reservedQuantity > quantity) {
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -80,16 +80,35 @@ class AddEditFoodItemViewModel(application: Application) : AndroidViewModel(appl
                 return@launch
             }
 
+            if (convertToDonation && (donationQuantity == null || donationQuantity == 0L)) {
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = "Donation quantity is required when flagging for donation."
+                )
+                return@launch
+            }
+
+            // --- 1. NEW VALIDATION CHECK ---
+            if (convertToDonation && donationQuantity != null) {
+                val availableQuantity = quantity - reservedQuantity
+                if (donationQuantity > availableQuantity) {
+                    _uiState.value = _uiState.value.copy(
+                        isLoading = false,
+                        error = "Donation quantity cannot be greater than the available quantity (Total - Reserved)."
+                    )
+                    return@launch
+                }
+            }
+            // --- END OF NEW CHECK ---
+
             val userId = sessionManager.getUserId()
             if (userId == null) {
                 _uiState.value = _uiState.value.copy(isLoading = false, error = "User not logged in.")
                 return@launch
             }
 
-            // --- 2. UPDATED: Get actionType from the loaded item or set a default ---
-            val actionType = _uiState.value.item?.actionType ?: "PLAN_FOR_MEAL" // Default for new items
+            val actionType = _uiState.value.item?.actionType ?: "PLAN_FOR_MEAL"
 
-            // Create the request object
             val request = FoodItemRequest(
                 name = name,
                 quantity = quantity,
@@ -99,10 +118,11 @@ class AddEditFoodItemViewModel(application: Application) : AndroidViewModel(appl
                 remarks = remarks,
                 contactMethod = contactMethod,
                 pickupLocation = pickupLocation,
-                actionType = actionType, // Use the determined actionType
+                actionType = actionType,
                 userId = userId,
                 convertToDonation = convertToDonation,
-                reservedQuantity = reservedQuantity
+                reservedQuantity = reservedQuantity,
+                donationQuantity = donationQuantity
             )
 
             try {
@@ -118,12 +138,10 @@ class AddEditFoodItemViewModel(application: Application) : AndroidViewModel(appl
         }
     }
 
-    // Function to clear the error message after it has been shown
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
     }
 
-    // Helper to format date from DatePicker (Long) to String (YYYY-MM-DD)
     fun formatMillisToDateString(millis: Long): String {
         val date = Date(millis)
         val formatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
@@ -131,7 +149,6 @@ class AddEditFoodItemViewModel(application: Application) : AndroidViewModel(appl
         return formatter.format(date)
     }
 
-    // Helper to parse date String (YYYY-MM-DD) to Long for the DatePicker
     fun parseDateStringToMillis(dateStr: String?): Long? {
         if (dateStr == null) return null
         return try {
