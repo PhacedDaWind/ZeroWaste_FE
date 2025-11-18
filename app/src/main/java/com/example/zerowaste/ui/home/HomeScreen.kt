@@ -3,9 +3,10 @@ package com.example.zerowaste.ui.home
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close // CORRECTED: Changed from Cancel to Close
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -22,18 +23,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.zerowaste.R // Make sure to have a placeholder image in res/drawable
-import com.example.zerowaste.data.remote.ExpiringItem
+import com.example.zerowaste.R
+import com.example.zerowaste.data.remote.ExpiringItemResponse
 import com.example.zerowaste.ui.theme.ZeroWasteTheme
 
-
 @Composable
-fun HomeScreen(viewModel: HomeViewModel) {
+fun HomeScreen(
+    viewModel: HomeViewModel,
+    onNavigateToInventory: () -> Unit // <-- 1. NEW PARAMETER
+) {
     val uiState by viewModel.uiState.collectAsState()
 
-    // --- THIS IS THE KEY FIX ---
-    // LaunchedEffect will run this block whenever the HomeScreen is first displayed.
-    // It tells the ViewModel to start loading data.
     LaunchedEffect(Unit) {
         viewModel.loadHomeScreenData()
     }
@@ -55,12 +55,12 @@ fun HomeScreen(viewModel: HomeViewModel) {
         ) {
             item { HeaderSection(username = uiState.username) }
             item { ActivitySummarySection(totalItems = uiState.totalItems, donationsMade = uiState.donationsMade) }
-            item { MainActionsSection() }
+            // 2. Pass the callback to the actions section
+            item { MainActionsSection(onNavigateToInventory = onNavigateToInventory) }
             item { ExpiryListSection(items = uiState.expiringItems) }
         }
     }
 }
-
 
 @Composable
 fun HeaderSection(username: String) {
@@ -70,9 +70,8 @@ fun HeaderSection(username: String) {
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            // Replace with your actual profile picture logic
             Image(
-                painter = painterResource(id = R.drawable.ic_launcher_foreground), // Placeholder image
+                painter = painterResource(id = R.drawable.ic_launcher_foreground),
                 contentDescription = "Profile Picture",
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
@@ -113,9 +112,10 @@ fun SummaryCard(title: String, value: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun MainActionsSection() {
+fun MainActionsSection(onNavigateToInventory: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        ActionButton(text = "Food Inventory", onClick = { /* TODO */ })
+        // 3. Trigger the callback when clicked
+        ActionButton(text = "Food Inventory", onClick = onNavigateToInventory)
         ActionButton(text = "Track and Report", onClick = { /* TODO */ })
         ActionButton(text = "Plan Weekly Meal", onClick = { /* TODO */ })
     }
@@ -128,48 +128,52 @@ fun ActionButton(text: String, onClick: () -> Unit) {
         modifier = Modifier.fillMaxWidth(),
         contentPadding = PaddingValues(16.dp)
     ) {
-        Icon(Icons.Default.Close, contentDescription = null, tint = Color.Gray) // CORRECTED: Changed from Cancel to Close
+        Icon(Icons.Default.Close, contentDescription = null, tint = Color.Gray)
         Spacer(modifier = Modifier.width(12.dp))
         Text(text, fontSize = 16.sp, modifier = Modifier.weight(1f))
     }
 }
 
 @Composable
-fun ExpiryListSection(items: List<ExpiringItem>) {
+fun ExpiryListSection(items: List<ExpiringItemResponse>) {
     Column {
         Text("Food expiry soon listing:", style = MaterialTheme.typography.titleMedium)
         Spacer(modifier = Modifier.height(8.dp))
         Card {
             Column {
-                // Header Row
                 Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                     Text("Name", modifier = Modifier.weight(2f), fontWeight = FontWeight.Bold)
                     Text("Quantity", modifier = Modifier.weight(1.5f), fontWeight = FontWeight.Bold)
                     Text("Expiry date", modifier = Modifier.weight(1.5f), fontWeight = FontWeight.Bold)
                 }
                 Divider()
-                // Data Rows
-                items.forEach { item ->
-                    Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                        Text(item.name, modifier = Modifier.weight(2f))
-                        Text(item.quantity, modifier = Modifier.weight(1.5f))
-                        Text(item.expiryDate, modifier = Modifier.weight(1.5f))
+                if (items.isEmpty()) {
+                    Text(
+                        "No items expiring soon.",
+                        modifier = Modifier.padding(16.dp),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                } else {
+                    items.forEach { item ->
+                        Row(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                            Text(item.foodName, modifier = Modifier.weight(2f))
+                            Text(item.quantity.toString(), modifier = Modifier.weight(1.5f))
+                            val color = if (item.daysUntilExpiry.contains("Today") || item.daysUntilExpiry.contains("Expired"))
+                                Color.Red else Color.Unspecified
+                            Text(item.daysUntilExpiry, modifier = Modifier.weight(1.5f), color = color)
+                        }
+                        Divider()
                     }
-                    Divider()
                 }
             }
         }
     }
 }
 
-
 @Preview(showBackground = true)
 @Composable
 fun HomeScreenPreview() {
     ZeroWasteTheme {
-        // Preview still works without a ViewModel
-        // HomeScreen(viewModel = HomeViewModel()) // This would require more setup for previews
-        Text("Home Screen Preview (Connect ViewModel for full preview)")
+        Text("Home Screen Preview")
     }
 }
-

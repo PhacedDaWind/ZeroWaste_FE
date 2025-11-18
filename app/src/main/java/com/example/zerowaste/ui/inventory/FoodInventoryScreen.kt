@@ -24,18 +24,16 @@ import com.example.zerowaste.data.remote.BrowseFoodItemResponse
 fun FoodInventoryScreen(
     viewModel: FoodInventoryViewModel,
     navController: NavController,
-    onNavigateToAddItem: () -> Unit, // Callback to navigate to Add screen
-    onNavigateToEditItem: (Long) -> Unit // Callback to navigate to Edit screen
+    onNavigateToAddItem: () -> Unit,
+    onNavigateToEditItem: (Long) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
 
-    // Trigger data loading when the screen is first displayed
     LaunchedEffect(Unit) {
         viewModel.loadInventoryItems()
     }
 
-    // Show a toast for any errors
     LaunchedEffect(uiState.error) {
         uiState.error?.let {
             Toast.makeText(context, it, Toast.LENGTH_LONG).show()
@@ -44,13 +42,9 @@ fun FoodInventoryScreen(
 
     Scaffold(
         topBar = {
+            // --- UPDATED: Removed navigationIcon (Back Button) ---
             TopAppBar(
-                title = { Text("My Food Inventory") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
+                title = { Text("My Food Inventory") }
             )
         },
         floatingActionButton = {
@@ -68,7 +62,7 @@ fun FoodInventoryScreen(
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
             } else if (uiState.items.isEmpty()) {
                 Text(
-                    text = "Your inventory is empty.\nTap the '+' button to add an item.",
+                    text = "Your inventory is empty. Tap the '+' button to add an item.",
                     modifier = Modifier.align(Alignment.Center)
                 )
             } else {
@@ -89,7 +83,6 @@ fun FoodInventoryScreen(
     }
 }
 
-// --- THIS IS THE UPDATED CARD ---
 @Composable
 fun InventoryItemCard(
     item: BrowseFoodItemResponse,
@@ -99,7 +92,7 @@ fun InventoryItemCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        onClick = onEdit // Make the whole card clickable to edit
+        onClick = onEdit
     ) {
         Row(
             modifier = Modifier
@@ -109,17 +102,14 @@ fun InventoryItemCard(
         ) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
 
-                // 1. Header Row with Name and Donation Badge
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = item.itemName,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        // Allow text to wrap if badge is present
                         modifier = Modifier.weight(1f, fill = false)
                     )
 
-                    // --- THE NEW INDICATOR ---
                     if (item.convertToDonation) {
                         Surface(
                             color = MaterialTheme.colorScheme.tertiaryContainer,
@@ -137,7 +127,6 @@ fun InventoryItemCard(
                     }
                 }
 
-                // 2. Item details
                 Text("Quantity: ${item.quantity}", style = MaterialTheme.typography.bodyMedium)
                 Text("Expires: ${item.expiryDate ?: "N/A"}", style = MaterialTheme.typography.bodyMedium)
             }

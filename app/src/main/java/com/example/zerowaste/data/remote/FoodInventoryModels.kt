@@ -47,3 +47,10 @@ data class UserResponse(
     val twoFactorAuthEnabled: Boolean,
     val status: String
 )
+
+data class ExpiringItemResponse(
+    val id: Long,
+    val foodName: String,
+    val quantity: Long,
+    val daysUntilExpiry: String // e.g. "3 days"
+)

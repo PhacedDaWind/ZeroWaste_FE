@@ -300,7 +300,18 @@ fun BottomNavGraph(
         startDestination = BottomBarScreen.Home.route
     ) {
         composable(route = BottomBarScreen.Home.route) {
-            HomeScreen(viewModel = homeViewModel)
+            HomeScreen(
+                viewModel = homeViewModel,
+                onNavigateToInventory = {
+                    bottomNavController.navigate(BottomBarScreen.Inventory.route) {
+                        popUpTo(bottomNavController.graph.findStartDestination().id) {
+                            saveState = true
+                        }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
+                }
+            )
         }
         composable(route = BottomBarScreen.Browse.route) {
             BrowseFoodItemScreen(
