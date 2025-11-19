@@ -48,16 +48,15 @@ fun AddEditFoodItemScreen(
 
     // State for validation errors
     var isNameError by remember { mutableStateOf(false) }
-
-    // Quantity errors
     var isQuantityError by remember { mutableStateOf(false) }
-    var quantityErrorMessage by remember { mutableStateOf("") } // New state for dynamic message
-
+    var quantityErrorMessage by remember { mutableStateOf("") }
     var isReservedQtyError by remember { mutableStateOf(false) }
-
-    // Donation errors
     var isDonationQtyError by remember { mutableStateOf(false) }
     var donationQtyErrorMessage by remember { mutableStateOf("") }
+
+    // --- 1. NEW: Contact/Location errors ---
+    var isPickupLocationError by remember { mutableStateOf(false) }
+    var isContactMethodError by remember { mutableStateOf(false) }
 
     var showDatePicker by remember { mutableStateOf(false) }
 
@@ -137,12 +136,9 @@ fun AddEditFoodItemScreen(
                         supportingText = { if (isNameError) Text("Name cannot be empty", color = MaterialTheme.colorScheme.error) },
                         singleLine = true
                     )
-
-                    // --- UPDATED QUANTITY FIELD ---
                     OutlinedTextField(
                         value = quantity,
                         onValueChange = {
-                            // Only allow numeric input
                             if (it.all { char -> char.isDigit() }) quantity = it
                             isQuantityError = false
                         },
@@ -150,11 +146,8 @@ fun AddEditFoodItemScreen(
                         modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         isError = isQuantityError,
-                        supportingText = {
-                            if (isQuantityError) Text(quantityErrorMessage, color = MaterialTheme.colorScheme.error)
-                        }
+                        supportingText = { if (isQuantityError) Text(quantityErrorMessage, color = MaterialTheme.colorScheme.error) }
                     )
-
                     OutlinedTextField(
                         value = expiryDate ?: "",
                         onValueChange = {},
@@ -187,16 +180,19 @@ fun AddEditFoodItemScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text("Flag for Donation?", style = MaterialTheme.typography.bodyLarge)
+                        Text("Convert to donation?", style = MaterialTheme.typography.bodyLarge)
                         Switch(
                             checked = convertToDonation,
                             onCheckedChange = {
                                 convertToDonation = it
+                                // Reset donation fields if toggled off
                                 if (!it) {
                                     pickupLocation = ""
                                     contactMethod = ""
                                     donationQuantity = ""
                                     isDonationQtyError = false
+                                    isPickupLocationError = false // Clear errors
+                                    isContactMethodError = false // Clear errors
                                 }
                             }
                         )
@@ -226,18 +222,30 @@ fun AddEditFoodItemScreen(
                                     if (isDonationQtyError) Text(donationQtyErrorMessage, color = MaterialTheme.colorScheme.error)
                                 }
                             )
+                            // --- 2. UPDATED Pickup Location Field ---
                             OutlinedTextField(
                                 value = pickupLocation,
-                                onValueChange = { pickupLocation = it },
-                                label = { Text("Pickup Location") },
+                                onValueChange = {
+                                    pickupLocation = it
+                                    isPickupLocationError = false
+                                },
+                                label = { Text("Pickup Location*") }, // Added asterisk
                                 modifier = Modifier.fillMaxWidth(),
+                                isError = isPickupLocationError,
+                                supportingText = { if (isPickupLocationError) Text("Pickup location is required for donation.", color = MaterialTheme.colorScheme.error) },
                                 singleLine = true
                             )
+                            // --- 3. UPDATED Contact Method Field ---
                             OutlinedTextField(
                                 value = contactMethod,
-                                onValueChange = { contactMethod = it },
-                                label = { Text("Contact Method") },
+                                onValueChange = {
+                                    contactMethod = it
+                                    isContactMethodError = false
+                                },
+                                label = { Text("Contact Method*") }, // Added asterisk
                                 modifier = Modifier.fillMaxWidth(),
+                                isError = isContactMethodError,
+                                supportingText = { if (isContactMethodError) Text("Contact method is required for donation.", color = MaterialTheme.colorScheme.error) },
                                 singleLine = true
                             )
                         }
@@ -273,32 +281,24 @@ fun AddEditFoodItemScreen(
                             val donationFieldsAreVisible = convertToDonation && !initialDonationState
                             val availableQuantity = quantLong - reservedLong
 
-                            // Reset all errors
-                            isNameError = false
-                            isQuantityError = false
-                            isReservedQtyError = false
-                            isDonationQtyError = false
+                            // Reset errors for primary fields
+                            isNameError = name.isBlank()
+                            isQuantityError = quantity.isBlank()
+                            isReservedQtyError = reservedLong > quantLong
 
-                            // 1. Check Name
-                            if (name.isBlank()) {
-                                isNameError = true
-                            }
-
-                            // 2. Check Quantity (Empty OR <= 0)
-                            if (quantity.isBlank()) {
-                                isQuantityError = true
-                                quantityErrorMessage = "Quantity cannot be empty"
-                            } else if (quantLong <= 0) {
+                            // Check Quantity (Empty OR <= 0)
+                            if (!isQuantityError && quantLong <= 0) {
                                 isQuantityError = true
                                 quantityErrorMessage = "Quantity must be greater than 0"
+                            } else if (isQuantityError) {
+                                quantityErrorMessage = "Quantity cannot be empty"
                             }
 
-                            // 3. Check Reserved
-                            if (reservedLong > quantLong) {
-                                isReservedQtyError = true
-                            }
+                            // 4. CHECK REQUIRED DONATION FIELDS
+                            isDonationQtyError = false
+                            isPickupLocationError = false
+                            isContactMethodError = false
 
-                            // 4. Check Donation
                             if (donationFieldsAreVisible) {
                                 if (donationQuantity.isBlank()) {
                                     isDonationQtyError = true
@@ -307,10 +307,16 @@ fun AddEditFoodItemScreen(
                                     isDonationQtyError = true
                                     donationQtyErrorMessage = "Donation quantity cannot exceed available quantity (${availableQuantity})."
                                 }
+                                if (pickupLocation.isBlank()) {
+                                    isPickupLocationError = true
+                                }
+                                if (contactMethod.isBlank()) {
+                                    isContactMethodError = true
+                                }
                             }
 
                             // Final check: proceed if no errors
-                            if (!isNameError && !isQuantityError && !isReservedQtyError && !isDonationQtyError) {
+                            if (!isNameError && !isQuantityError && !isReservedQtyError && !isDonationQtyError && !isPickupLocationError && !isContactMethodError) {
                                 viewModel.saveItem(
                                     itemId = itemId,
                                     name = name,
@@ -319,6 +325,7 @@ fun AddEditFoodItemScreen(
                                     category = category.ifBlank { null },
                                     storageLocation = storageLocation.ifBlank { null },
                                     remarks = remarks.ifBlank { null },
+                                    // Send contact/pickup as null if donation is off, or validated value if on
                                     contactMethod = if (convertToDonation) contactMethod.ifBlank { null } else null,
                                     pickupLocation = if (convertToDonation) pickupLocation.ifBlank { null } else null,
                                     convertToDonation = convertToDonation,
